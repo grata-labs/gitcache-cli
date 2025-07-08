@@ -14,7 +14,7 @@ jobs:
       has-code: ${{ steps.changes.outputs.has-code }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -80,7 +80,7 @@ jobs:
       - run: npm ci
       - run: npm run test:coverage
       - name: Upload primary coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           flags: primary,ubuntu,node20
           name: ubuntu-node20
@@ -133,7 +133,7 @@ jobs:
       - run: npm ci
       - run: npm run test:coverage
       - name: Upload matrix coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           flags: extended,${{ matrix.os }},node${{ matrix.node }}
           name: ${{ matrix.os }}-node${{ matrix.node }}
@@ -173,7 +173,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Download all coverage reports
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: coverage-reports
         continue-on-error: true

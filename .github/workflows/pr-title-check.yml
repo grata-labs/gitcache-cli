@@ -14,7 +14,7 @@ jobs:
 
       - name: Check if docs-only change
         id: docs-check
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         with:
           filters: |
             docs-only:
