@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'owlstronaut'
+    assignees:
+      - 'owlstronaut'
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+      - 'automated'
+    # Group minor and patch updates together
+    groups:
+      minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
