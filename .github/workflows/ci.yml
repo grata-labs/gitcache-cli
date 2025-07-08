@@ -30,21 +30,99 @@ jobs:
               - 'vitest.config.ts'
               - 'eslint.config.js'
 
-  test:
+  # ============================================================================
+  # STAGE 1: Quick validation (runs in parallel, fails fast)
+  # ============================================================================
+
+  lint:
+    name: 'Quick Check: Lint'
     needs: changes
+    runs-on: ubuntu-latest
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    name: 'Quick Check: TypeScript'
+    needs: changes
+    runs-on: ubuntu-latest
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit --incremental false
+
+  # ============================================================================
+  # STAGE 2: Core testing (only runs if Stage 1 passes)
+  # ============================================================================
+
+  test-primary:
+    name: 'Core Tests: Ubuntu + Node 20'
+    needs: [changes, lint, typecheck]
+    runs-on: ubuntu-latest
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - name: Upload primary coverage
+        uses: codecov/codecov-action@v3
+        with:
+          flags: primary,ubuntu,node20
+          name: ubuntu-node20
+        if: always()
+
+  build-primary:
+    name: 'Core Build: Verify Build'
+    needs: [changes, lint, typecheck]
+    runs-on: ubuntu-latest
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  # ============================================================================
+  # STAGE 3: Extended validation (only runs if Stage 2 passes)
+  # ============================================================================
+
+  test-matrix:
+    name: 'Extended: ${{ matrix.os }} + Node ${{ matrix.node }}'
+    needs: [changes, test-primary, build-primary]
     runs-on: ${{ matrix.os }}
-    # Skip CI for draft PRs to save resources, or if only docs changed
     if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, macos-14] # macos-14 is Apple Silicon (M1/M2)
-        node: [20, 22]
-        exclude:
-          # Reduce matrix size by excluding some combinations
-          - os: windows-latest
+        # Skip Ubuntu + Node 20 since we already tested it in Stage 2
+        include:
+          - os: ubuntu-latest
             node: 22
+          - os: windows-latest
+            node: 20
           - os: macos-latest # Intel Mac
+            node: 20
+          - os: macos-14 # Apple Silicon
+            node: 20
+          - os: macos-14 # Apple Silicon
             node: 22
     steps:
       - uses: actions/checkout@v4
@@ -53,12 +131,21 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm run lint
       - run: npm run test:coverage
+      - name: Upload matrix coverage
+        uses: codecov/codecov-action@v3
+        with:
+          flags: extended,${{ matrix.os }},node${{ matrix.node }}
+          name: ${{ matrix.os }}-node${{ matrix.node }}
+        if: always()
       - run: npm run build
 
-  # Lightweight job for docs-only changes
+  # ============================================================================
+  # DOCS-ONLY: Lightweight validation for documentation changes
+  # ============================================================================
+
   docs-check:
+    name: 'Docs: Validation'
     needs: changes
     runs-on: ubuntu-latest
     if: needs.changes.outputs.docs-only == 'true' && needs.changes.outputs.has-code == 'false'
@@ -68,3 +155,86 @@ jobs:
         run: |
           echo "✅ Documentation changes detected"
           echo "Skipping full CI suite for docs-only changes"
+
+  # ============================================================================
+  # COVERAGE: Aggregate coverage from all platforms
+  # ============================================================================
+
+  coverage-summary:
+    name: 'Coverage: Summary'
+    needs: [changes, test-primary, test-matrix]
+    runs-on: ubuntu-latest
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Download all coverage reports
+        uses: actions/download-artifact@v3
+        with:
+          path: coverage-reports
+        continue-on-error: true
+      - name: Display coverage summary
+        run: |
+          echo "📊 Coverage Summary:"
+          echo "- Primary (Ubuntu + Node 20): Uploaded to Codecov with 'primary' flag"
+          echo "- Extended (Cross-platform): Uploaded to Codecov with 'extended' flag"
+          echo "- View detailed reports at: https://codecov.io/gh/${{ github.repository }}"
+          echo ""
+          echo "💡 Codecov will merge coverage from all platforms automatically"
+
+  # ============================================================================
+  # FINAL STATUS: Summary job for branch protection rules
+  # ============================================================================
+
+  ci-success:
+    name: 'CI Success'
+    runs-on: ubuntu-latest
+    needs:
+      [
+        changes,
+        lint,
+        typecheck,
+        test-primary,
+        build-primary,
+        test-matrix,
+        docs-check,
+        coverage-summary,
+      ]
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          # Check if this is a docs-only change
+          if [[ "${{ needs.changes.outputs.docs-only }}" == "true" && "${{ needs.changes.outputs.has-code }}" == "false" ]]; then
+            echo "✅ Docs-only change - docs-check must pass"
+            if [[ "${{ needs.docs-check.result }}" != "success" ]]; then
+              echo "❌ Docs check failed"
+              exit 1
+            fi
+          else
+            echo "✅ Code change - all stages must pass"
+            # Stage 1: Quick checks
+            if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.typecheck.result }}" != "success" ]]; then
+              echo "❌ Stage 1 (Quick checks) failed"
+              exit 1
+            fi
+            # Stage 2: Core testing  
+            if [[ "${{ needs.test-primary.result }}" != "success" || "${{ needs.build-primary.result }}" != "success" ]]; then
+              echo "❌ Stage 2 (Core testing) failed"
+              exit 1
+            fi
+            # Stage 3: Extended validation
+            if [[ "${{ needs.test-matrix.result }}" != "success" ]]; then
+              echo "❌ Stage 3 (Extended validation) failed"
+              exit 1
+            fi
+            # Coverage summary (informational)
+            if [[ "${{ needs.coverage-summary.result }}" == "success" ]]; then
+              echo "📊 Coverage reports successfully aggregated"
+            fi
+          fi
+          echo "🎉 All required checks passed!"
