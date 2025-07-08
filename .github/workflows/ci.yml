@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs-only: ${{ steps.changes.outputs.docs-only }}
+      tests-only: ${{ steps.changes.outputs.tests-only }}
       has-code: ${{ steps.changes.outputs.has-code }}
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +23,10 @@ jobs:
               - '**.md'
               - 'docs/**'
               - '.github/workflows/**.yml'
+            tests-only:
+              - 'src/test/**'
+              - '**/*.test.ts'
+              - 'vitest.config.ts'
             has-code:
               - 'src/**'
               - 'package.json'
@@ -108,7 +113,7 @@ jobs:
     name: 'Extended: ${{ matrix.os }} + Node ${{ matrix.node }}'
     needs: [changes, test-primary, build-primary]
     runs-on: ${{ matrix.os }}
-    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true' && needs.changes.outputs.tests-only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -141,6 +146,36 @@ jobs:
       - run: npm run build
 
   # ============================================================================
+  # TESTS-ONLY: Lightweight validation for test-only changes
+  # ============================================================================
+
+  tests-check:
+    name: 'Tests: Validation'
+    needs: changes
+    runs-on: ubuntu-latest
+    if: needs.changes.outputs.tests-only == 'true' && needs.changes.outputs.has-code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Run tests with coverage
+        run: npm run test:coverage
+      - name: Upload test-only coverage
+        uses: codecov/codecov-action@v5
+        with:
+          flags: tests-only,ubuntu,node20
+          name: tests-only-ubuntu-node20
+        if: always()
+      - name: Validate tests summary
+        run: |
+          echo "✅ Test-only changes detected"
+          echo "Skipping extended CI suite for test-only changes"
+          echo "📊 Running essential validation: tests + coverage"
+
+  # ============================================================================
   # DOCS-ONLY: Lightweight validation for documentation changes
   # ============================================================================
 
@@ -164,7 +199,7 @@ jobs:
     name: 'Coverage: Summary'
     needs: [changes, test-primary, test-matrix]
     runs-on: ubuntu-latest
-    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true' && needs.changes.outputs.tests-only != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -202,6 +237,7 @@ jobs:
         build-primary,
         test-matrix,
         docs-check,
+        tests-check,
         coverage-summary,
       ]
     if: always()
@@ -213,6 +249,13 @@ jobs:
             echo "✅ Docs-only change - docs-check must pass"
             if [[ "${{ needs.docs-check.result }}" != "success" ]]; then
               echo "❌ Docs check failed"
+              exit 1
+            fi
+          # Check if this is a tests-only change
+          elif [[ "${{ needs.changes.outputs.tests-only }}" == "true" && "${{ needs.changes.outputs.has-code }}" == "true" ]]; then
+            echo "✅ Tests-only change - tests-check must pass"
+            if [[ "${{ needs.tests-check.result }}" != "success" ]]; then
+              echo "❌ Tests check failed"
               exit 1
             fi
           else
