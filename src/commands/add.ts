@@ -7,11 +7,11 @@ import {
 } from '../lib/utils/git.js';
 
 /**
- * Cache command - mirrors a Git repository locally
+ * Add command - mirrors a Git repository locally
  */
-export class Cache extends BaseCommand {
+export class Add extends BaseCommand {
   static description = 'Mirror a repository into your local cache';
-  static commandName = 'cache';
+  static commandName = 'add';
   static usage = ['<repo>', '<repo> --force'];
   static params = ['force'];
 
