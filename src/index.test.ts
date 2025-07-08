@@ -1,119 +1,166 @@
-import { execSync } from 'node:child_process';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { cacheRepository, main } from './index.js';
 
-vi.mock('node:child_process', () => ({
-  execSync: vi.fn(),
+// Mock the Cache command
+vi.mock('./commands/cache.js', () => ({
+  Cache: vi.fn().mockImplementation(() => ({
+    exec: vi
+      .fn()
+      .mockReturnValue(
+        '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
+      ),
+  })),
+}));
+
+// Mock commander to avoid actual CLI execution
+vi.mock('commander', () => ({
+  Command: vi.fn().mockImplementation(() => ({
+    name: vi.fn().mockReturnThis(),
+    description: vi.fn().mockReturnThis(),
+    version: vi.fn().mockReturnThis(),
+    command: vi.fn().mockReturnThis(),
+    option: vi.fn().mockReturnThis(),
+    action: vi.fn().mockReturnThis(),
+    parseAsync: vi.fn().mockResolvedValue(undefined),
+  })),
 }));
 
 const originalEnv = process.env;
-const originalArgv = process.argv;
 
 beforeEach(() => {
   vi.clearAllMocks();
   process.env = { ...originalEnv, HOME: '/home/testuser' };
-  process.argv = [...originalArgv];
 });
 
 describe('gitcache CLI', () => {
   describe('cacheRepository', () => {
-    it('should execute git clone --mirror with correct target path', () => {
-      const mockExecSync = vi.mocked(execSync);
-      const repo = 'https://github.com/user/repo.git';
-      const expectedTarget = '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git';
+    it('should delegate to Cache command and return target path', async () => {
+      const { Cache } = await import('./commands/cache.js');
+      const MockCache = vi.mocked(Cache);
+      const mockExec = vi
+        .fn()
+        .mockReturnValue(
+          '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
+        );
+      MockCache.mockImplementation(
+        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Cache>
+      );
 
+      const repo = 'https://github.com/user/repo.git';
       const result = cacheRepository(repo);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
-        `git clone --mirror ${repo} "${expectedTarget}"`,
-        { stdio: 'inherit' }
+      expect(MockCache).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalledWith([repo], {});
+      expect(result).toBe(
+        '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
       );
-      expect(result).toBe(expectedTarget);
     });
 
-    it('should execute repack when force option is true', () => {
-      const mockExecSync = vi.mocked(execSync);
-      const repo = 'https://github.com/user/repo.git';
-      const expectedTarget = '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git';
+    it('should pass force option to Cache command', async () => {
+      const { Cache } = await import('./commands/cache.js');
+      const MockCache = vi.mocked(Cache);
+      const mockExec = vi
+        .fn()
+        .mockReturnValue(
+          '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
+        );
+      MockCache.mockImplementation(
+        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Cache>
+      );
 
+      const repo = 'https://github.com/user/repo.git';
       cacheRepository(repo, { force: true });
 
-      expect(mockExecSync).toHaveBeenCalledTimes(2);
-      expect(mockExecSync).toHaveBeenNthCalledWith(1,
-        `git clone --mirror ${repo} "${expectedTarget}"`,
-        { stdio: 'inherit' }
-      );
-      expect(mockExecSync).toHaveBeenNthCalledWith(2,
-        `git -C "${expectedTarget}" repack -ad`,
-        { stdio: 'inherit' }
-      );
-    });
-
-    it('should not execute repack when force option is false', () => {
-      const mockExecSync = vi.mocked(execSync);
-      const repo = 'https://github.com/user/repo.git';
-
-      cacheRepository(repo, { force: false });
-
-      expect(mockExecSync).toHaveBeenCalledTimes(1);
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('git clone --mirror'),
-        { stdio: 'inherit' }
-      );
-    });
-
-    it('should not execute repack when no options provided', () => {
-      const mockExecSync = vi.mocked(execSync);
-      const repo = 'https://github.com/user/repo.git';
-
-      cacheRepository(repo);
-
-      expect(mockExecSync).toHaveBeenCalledTimes(1);
-    });
-
-    it('should handle complex repository URLs correctly', () => {
-      const mockExecSync = vi.mocked(execSync);
-      const repo = 'git@github.com:org/repo-with-dashes.git';
-      const expectedTarget = '/home/testuser/.gitcache/git%40github.com%3Aorg%2Frepo-with-dashes.git';
-
-      const result = cacheRepository(repo);
-
-      expect(result).toBe(expectedTarget);
-      expect(mockExecSync).toHaveBeenCalledWith(
-        `git clone --mirror ${repo} "${expectedTarget}"`,
-        { stdio: 'inherit' }
-      );
+      expect(mockExec).toHaveBeenCalledWith([repo], { force: true });
     });
   });
 
   describe('main', () => {
-    it('should handle cache command with valid arguments', async () => {
-      const mockExecSync = vi.mocked(execSync);
-      process.argv = ['node', 'index.js', 'cache', 'https://github.com/user/repo.git'];
+    it('should set up commander program correctly', async () => {
+      const { Command } = await import('commander');
+      const { Cache } = await import('./commands/cache.js');
+      const MockCommand = vi.mocked(Command);
+      const MockCache = vi.mocked(Cache);
+
+      let actionCallback:
+        | ((repo: string, opts: { force?: boolean }) => void)
+        | undefined;
+
+      const mockProgram = {
+        name: vi.fn().mockReturnThis(),
+        description: vi.fn().mockReturnThis(),
+        version: vi.fn().mockReturnThis(),
+        command: vi.fn().mockReturnThis(),
+        option: vi.fn().mockReturnThis(),
+        action: vi.fn().mockImplementation((callback) => {
+          actionCallback = callback;
+          return mockProgram;
+        }),
+        parseAsync: vi.fn().mockResolvedValue(undefined),
+      };
+      MockCommand.mockImplementation(
+        () => mockProgram as unknown as InstanceType<typeof Command>
+      );
+
+      const mockExec = vi.fn();
+      MockCache.mockImplementation(
+        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Cache>
+      );
 
       await main();
 
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('git clone --mirror'),
-        { stdio: 'inherit' }
+      expect(mockProgram.name).toHaveBeenCalledWith('gitcache');
+      expect(mockProgram.description).toHaveBeenCalledWith(
+        'Universal Git-dependency cache & proxy CLI'
       );
+      expect(mockProgram.version).toHaveBeenCalled();
+      expect(mockProgram.command).toHaveBeenCalledWith('cache <repo>');
+      expect(mockProgram.parseAsync).toHaveBeenCalledWith(process.argv);
+
+      // Test the action callback
+      expect(actionCallback).toBeDefined();
+      if (actionCallback) {
+        actionCallback('https://github.com/test/repo.git', { force: true });
+        expect(MockCache).toHaveBeenCalled();
+        expect(mockExec).toHaveBeenCalledWith(
+          ['https://github.com/test/repo.git'],
+          { force: true }
+        );
+      }
     });
 
-    it('should handle cache command with force flag', async () => {
-      const mockExecSync = vi.mocked(execSync);
-      process.argv = ['node', 'index.js', 'cache', 'https://github.com/user/repo.git', '--force'];
-
-      await main();
-
-      expect(mockExecSync).toHaveBeenCalledTimes(2);
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('git clone --mirror'),
-        { stdio: 'inherit' }
+    it('should handle parseAsync errors', async () => {
+      const { Command } = await import('commander');
+      const MockCommand = vi.mocked(Command);
+      const mockProgram = {
+        name: vi.fn().mockReturnThis(),
+        description: vi.fn().mockReturnThis(),
+        version: vi.fn().mockReturnThis(),
+        command: vi.fn().mockReturnThis(),
+        option: vi.fn().mockReturnThis(),
+        action: vi.fn().mockReturnThis(),
+        parseAsync: vi.fn().mockRejectedValue(new Error('Test error')),
+      };
+      MockCommand.mockImplementation(
+        () => mockProgram as unknown as InstanceType<typeof Command>
       );
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('repack -ad'),
-        { stdio: 'inherit' }
-      );
+
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const processExitSpy = vi
+        .spyOn(process, 'exit')
+        .mockImplementation(() => {
+          throw new Error('process.exit called');
+        });
+
+      await expect(main()).rejects.toThrow('process.exit called');
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.any(Error));
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+
+      consoleErrorSpy.mockRestore();
+      processExitSpy.mockRestore();
     });
   });
 });
