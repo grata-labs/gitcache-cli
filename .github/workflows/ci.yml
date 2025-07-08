@@ -97,6 +97,7 @@ jobs:
 
   # ============================================================================
   # STAGE 2: Core testing (only runs if Stage 1 passes)
+  # Integration tests run ONLY here for efficiency - no need to repeat across matrix
   # ============================================================================
 
   test-primary:
@@ -111,7 +112,7 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
-      - run: npm run test:coverage
+      - run: npm run test:ci:coverage
       - name: Upload primary coverage
         uses: codecov/codecov-action@v5
         with:
@@ -135,6 +136,7 @@ jobs:
 
   # ============================================================================
   # STAGE 3: Extended validation (only runs if Stage 2 passes)
+  # Unit tests only - integration already validated in Stage 2
   # ============================================================================
 
   test-matrix:
@@ -164,7 +166,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm run test:coverage
+      - run: npm run test:unit
       - name: Upload matrix coverage
         uses: codecov/codecov-action@v5
         with:
@@ -190,7 +192,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Run tests with coverage
-        run: npm run test:coverage
+        run: npm run test:ci:coverage
       - name: Upload test-only coverage
         uses: codecov/codecov-action@v5
         with:
