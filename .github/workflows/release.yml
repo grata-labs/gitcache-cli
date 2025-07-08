@@ -1,16 +1,6 @@
 name: Release
 on:
   workflow_dispatch:  # Manual trigger only
-    inputs:
-      version:
-        description: 'Release type'
-        required: true
-        default: 'patch'
-        type: choice
-        options:
-        - patch
-        - minor
-        - major
 
 jobs:
   release:
