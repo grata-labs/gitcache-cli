@@ -13,7 +13,17 @@
     "lint:fix": "eslint . --ext .ts --fix",
     "lint:commits": "commitlint --from main --to HEAD",
     "format": "prettier --write \"src/**/*.ts\"",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{md,json,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "repository": {
     "type": "git",
@@ -55,6 +65,8 @@
     "eslint": "^9.30.1",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
     "prettier": "^3.6.2",
     "semantic-release": "^24.2.6",
     "tsx": "^4.20.3",
