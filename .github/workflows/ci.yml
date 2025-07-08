@@ -12,6 +12,7 @@ jobs:
     outputs:
       docs-only: ${{ steps.changes.outputs.docs-only }}
       tests-only: ${{ steps.changes.outputs.tests-only }}
+      tooling-only: ${{ steps.changes.outputs.tooling-only }}
       has-code: ${{ steps.changes.outputs.has-code }}
     steps:
       - uses: actions/checkout@v4
@@ -23,10 +24,27 @@ jobs:
               - '**.md'
               - 'docs/**'
               - '.github/workflows/**.yml'
+              - 'CONTRIBUTING.md'
+              - 'CHANGELOG.md'
+              - 'LICENSE'
             tests-only:
               - 'src/test/**'
               - '**/*.test.ts'
               - 'vitest.config.ts'
+            tooling-only:
+              - '.husky/**'
+              - '.gitignore'
+              - '.npmignore'
+              - '.releaserc.json'
+              - '.prettierrc*'
+              - '.commitlintrc*'
+              - '.env*'
+              - '.vscode/**'
+              - 'eslint.config.js'
+              - 'prettier.config.*'
+              - '.editorconfig'
+              - 'commitlint.config.*'
+              - '*.log'
             has-code:
               - 'src/**'
               - 'package.json'
@@ -176,6 +194,22 @@ jobs:
           echo "📊 Running essential validation: tests + coverage"
 
   # ============================================================================
+  # TOOLING-ONLY: Lightweight validation for tooling changes
+  # ============================================================================
+
+  tooling-check:
+    name: 'Tooling: Validation'
+    needs: changes
+    runs-on: ubuntu-latest
+    if: needs.changes.outputs.tooling-only == 'true' && needs.changes.outputs.has-code == 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate tooling changes
+        run: |
+          echo "✅ Tooling changes detected (.husky, config files, etc.)"
+          echo "Skipping full CI suite for tooling-only changes"
+
+  # ============================================================================
   # DOCS-ONLY: Lightweight validation for documentation changes
   # ============================================================================
 
@@ -238,6 +272,7 @@ jobs:
         test-matrix,
         docs-check,
         tests-check,
+        tooling-check,
         coverage-summary,
       ]
     if: always()
