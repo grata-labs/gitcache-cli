@@ -71,7 +71,7 @@ export function main() {
 
 // Only run CLI if this file is executed directly
 /* c8 ignore start */
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('/gitcache')) {
   main();
 }
 /* c8 ignore stop */
