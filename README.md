@@ -3,7 +3,7 @@
 > Universal Git-dependency cache & proxy — _CLI client_
 
 ![CI](https://github.com/grata-labs/gitcache-cli/actions/workflows/ci.yml/badge.svg)
-[![npm version](https://badge.fury.io/js/%40grata-labs%2Fgitcache-cli.svg)](https://badge.fury.io/js/%40grata-labs%2Fgitcache-cli)
+[![npm version](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli.svg)](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli)
 
 A TypeScript CLI for caching Git repositories locally and (coming soon) syncing with team-shared GitCache proxies.
 
