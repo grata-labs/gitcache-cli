@@ -1,6 +1,6 @@
 # GitCache CLI
 
-> Universal Git-dependency cache & proxy — *CLI client*
+> Universal Git-dependency cache & proxy — _CLI client_
 
 ![CI](https://github.com/grata-labs/gitcache-cli/actions/workflows/ci.yml/badge.svg)
 [![npm version](https://badge.fury.io/js/%40grata-labs%2Fgitcache-cli.svg)](https://badge.fury.io/js/%40grata-labs%2Fgitcache-cli)
@@ -60,7 +60,7 @@ npm run lint
 
 ## Contributing
 
-PRs & issues welcome! This is an open-source project from [Grata Labs](https://grata.co).
+PRs & issues welcome! This is an open-source project from [Grata Labs](https://grata-labs.com).
 
 ## License
 
