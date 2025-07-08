@@ -12,6 +12,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check if docs-only change
+        id: docs-check
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            docs-only:
+              - '**.md'
+              - 'docs/**'
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -25,3 +34,7 @@ jobs:
         run: echo "${{ github.event.pull_request.title }}" | npx commitlint
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docs-only notification
+        if: steps.docs-check.outputs.docs-only == 'true'
+        run: echo "✅ Docs-only change detected - full CI suite will be skipped"
