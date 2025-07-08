@@ -1,9 +1,15 @@
 name: CI
-on: [push, pull_request]
+on: 
+  push:
+  pull_request:
+    # Only run for trusted events to save Actions minutes
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   node:
     runs-on: ubuntu-latest
+    # Skip CI for draft PRs to save resources
+    if: github.event.pull_request.draft == false || github.event_name == 'push'
     strategy:
       matrix: { node: [20, 22] }
     steps:

@@ -1,0 +1,9 @@
+# GitCache CLI Code Owners
+
+# Global owners - these users are requested for all PRs
+* @owlstronaut
+
+# Specific areas (add as team grows)
+/src/ @owlstronaut
+/.github/ @owlstronaut
+/package.json @owlstronaut
