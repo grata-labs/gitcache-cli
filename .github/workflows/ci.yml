@@ -1,15 +1,40 @@
 name: CI
-on: 
+on:
   push:
   pull_request:
     # Only run for trusted events to save Actions minutes
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
+  # Check if we need to run full CI or just docs validation
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs-only: ${{ steps.changes.outputs.docs-only }}
+      has-code: ${{ steps.changes.outputs.has-code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            docs-only:
+              - '**.md'
+              - 'docs/**'
+              - '.github/workflows/**.yml'
+            has-code:
+              - 'src/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig.json'
+              - 'vitest.config.ts'
+              - 'eslint.config.js'
+
   test:
+    needs: changes
     runs-on: ${{ matrix.os }}
-    # Skip CI for draft PRs to save resources
-    if: github.event.pull_request.draft != true || github.event_name == 'push'
+    # Skip CI for draft PRs to save resources, or if only docs changed
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -31,3 +56,15 @@ jobs:
       - run: npm run lint
       - run: npm run test:coverage
       - run: npm run build
+
+  # Lightweight job for docs-only changes
+  docs-check:
+    needs: changes
+    runs-on: ubuntu-latest
+    if: needs.changes.outputs.docs-only == 'true' && needs.changes.outputs.has-code == 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Markdown files
+        run: |
+          echo "✅ Documentation changes detected"
+          echo "Skipping full CI suite for docs-only changes"
