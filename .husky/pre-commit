@@ -1,1 +1,20 @@
+# Check if we're on main branch and if this is the upstream repo
+branch=$(git rev-parse --abbrev-ref HEAD)
+remote_url=$(git config --get remote.origin.url 2>/dev/null || echo "")
+
+# Only enforce main branch protection for the upstream repository
+if [ "$branch" = "main" ] && echo "$remote_url" | grep -q "grata-labs/gitcache-cli"; then
+  echo "🚫 Direct commits to main branch are not allowed in the upstream repository!"
+  echo ""
+  echo "Please create a feature branch and submit a pull request:"
+  echo "  git checkout -b feature/your-feature-name"
+  echo "  git add ."
+  echo "  git commit -m \"your commit message\""
+  echo "  git push origin feature/your-feature-name"
+  echo ""
+  echo "To bypass this check (use with caution):"
+  echo "  git commit --no-verify"
+  exit 1
+fi
+
 npx lint-staged
