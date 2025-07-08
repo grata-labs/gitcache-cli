@@ -6,12 +6,21 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  node:
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ${{ matrix.os }}
     # Skip CI for draft PRs to save resources
     if: github.event.pull_request.draft != true || github.event_name == 'push'
     strategy:
-      matrix: { node: [20, 22] }
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-14] # macos-14 is Apple Silicon (M1/M2)
+        node: [20, 22]
+        exclude:
+          # Reduce matrix size by excluding some combinations
+          - os: windows-latest
+            node: 22
+          - os: macos-latest # Intel Mac
+            node: 22
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
