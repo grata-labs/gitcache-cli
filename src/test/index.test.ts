@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { cacheRepository, main } from './index.js';
+import { cacheRepository, main } from '../index.js';
 
 // Mock the Cache command
-vi.mock('./commands/cache.js', () => ({
+vi.mock('../commands/cache.js', () => ({
   Cache: vi.fn().mockImplementation(() => ({
     exec: vi
       .fn()
@@ -35,7 +35,7 @@ beforeEach(() => {
 describe('gitcache CLI', () => {
   describe('cacheRepository', () => {
     it('should delegate to Cache command and return target path', async () => {
-      const { Cache } = await import('./commands/cache.js');
+      const { Cache } = await import('../commands/cache.js');
       const MockCache = vi.mocked(Cache);
       const mockExec = vi
         .fn()
@@ -57,7 +57,7 @@ describe('gitcache CLI', () => {
     });
 
     it('should pass force option to Cache command', async () => {
-      const { Cache } = await import('./commands/cache.js');
+      const { Cache } = await import('../commands/cache.js');
       const MockCache = vi.mocked(Cache);
       const mockExec = vi
         .fn()
@@ -78,7 +78,7 @@ describe('gitcache CLI', () => {
   describe('main', () => {
     it('should set up commander program correctly', async () => {
       const { Command } = await import('commander');
-      const { Cache } = await import('./commands/cache.js');
+      const { Cache } = await import('../commands/cache.js');
       const MockCommand = vi.mocked(Command);
       const MockCache = vi.mocked(Cache);
 
