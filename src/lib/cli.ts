@@ -29,9 +29,7 @@ export function main(): Promise<Command> {
   const program = createCLI();
 
   return program.parseAsync(process.argv).catch((err) => {
-    /* c8 ignore start */
     console.error(err);
     process.exit(1);
-    /* c8 ignore stop */
   });
 }
