@@ -1,17 +1,32 @@
 name: Release
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      version:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v4
         with: { node-version: 20 , cache: npm , registry-url: 'https://registry.npmjs.org' }
       - run: npm ci
-      - run: npx semantic-release
+      - run: npm run build
+      - run: npm version ${{ github.event.inputs.version }}
+      - run: npm publish
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: git push --follow-tags
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

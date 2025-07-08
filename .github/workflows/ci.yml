@@ -9,13 +9,15 @@ jobs:
   node:
     runs-on: ubuntu-latest
     # Skip CI for draft PRs to save resources
-    if: github.event.pull_request.draft == false || github.event_name == 'push'
+    if: github.event.pull_request.draft != true || github.event_name == 'push'
     strategy:
       matrix: { node: [20, 22] }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: ${{ matrix.node }} , cache: npm }
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm test -- --coverage
