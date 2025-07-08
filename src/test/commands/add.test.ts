@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { join } from 'node:path';
-import { Cache } from '../../commands/cache.js';
+import { Add } from '../../commands/add.js';
 
 vi.mock('../../lib/utils/git.js', () => ({
   cloneMirror: vi.fn(),
@@ -14,12 +14,12 @@ beforeEach(() => {
   process.env = { ...originalEnv, HOME: '/home/testuser' };
 });
 
-describe('Cache command', () => {
+describe('Add command', () => {
   it('should execute git clone --mirror with correct target path', async () => {
     const { cloneMirror } = await import('../../lib/utils/git.js');
     const mockCloneMirror = vi.mocked(cloneMirror);
 
-    const cache = new Cache();
+    const add = new Add();
     const repo = 'https://github.com/user/repo.git';
     const expectedTarget = join(
       '/home/testuser',
@@ -27,7 +27,7 @@ describe('Cache command', () => {
       'https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
     );
 
-    const result = cache.exec([repo]);
+    const result = add.exec([repo]);
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(result).toBe(expectedTarget);
@@ -40,7 +40,7 @@ describe('Cache command', () => {
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
 
-    const cache = new Cache();
+    const add = new Add();
     const repo = 'https://github.com/user/repo.git';
     const expectedTarget = join(
       '/home/testuser',
@@ -48,7 +48,7 @@ describe('Cache command', () => {
       'https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
     );
 
-    cache.exec([repo], { force: true });
+    add.exec([repo], { force: true });
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockRepackRepository).toHaveBeenCalledWith(expectedTarget);
@@ -61,10 +61,10 @@ describe('Cache command', () => {
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
 
-    const cache = new Cache();
+    const add = new Add();
     const repo = 'https://github.com/user/repo.git';
 
-    cache.exec([repo], { force: false });
+    add.exec([repo], { force: false });
 
     expect(mockCloneMirror).toHaveBeenCalledTimes(1);
     expect(mockRepackRepository).not.toHaveBeenCalled();
@@ -77,10 +77,10 @@ describe('Cache command', () => {
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
 
-    const cache = new Cache();
+    const add = new Add();
     const repo = 'https://github.com/user/repo.git';
 
-    cache.exec([repo]);
+    add.exec([repo]);
 
     expect(mockCloneMirror).toHaveBeenCalledTimes(1);
     expect(mockRepackRepository).not.toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe('Cache command', () => {
     const { cloneMirror } = await import('../../lib/utils/git.js');
     const mockCloneMirror = vi.mocked(cloneMirror);
 
-    const cache = new Cache();
+    const add = new Add();
     const repo = 'git@github.com:org/repo-with-dashes.git';
     const expectedTarget = join(
       '/home/testuser',
@@ -98,15 +98,15 @@ describe('Cache command', () => {
       'git%40github.com%3Aorg%2Frepo-with-dashes.git'
     );
 
-    const result = cache.exec([repo]);
+    const result = add.exec([repo]);
 
     expect(result).toBe(expectedTarget);
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
   });
 
   it('should throw error when no repository URL provided', () => {
-    const cache = new Cache();
+    const add = new Add();
 
-    expect(() => cache.exec([])).toThrow('Repository URL is required');
+    expect(() => add.exec([])).toThrow('Repository URL is required');
   });
 });
