@@ -2,12 +2,10 @@ import { execSync } from 'node:child_process';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { cacheRepository, main } from './index.js';
 
-// Mock execSync to avoid actually running git commands in tests
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
 }));
 
-// Mock process.env.HOME for consistent tests
 const originalEnv = process.env;
 const originalArgv = process.argv;
 
