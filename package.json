@@ -26,7 +26,7 @@
     "url": "https://github.com/grata-labs/gitcache-cli/issues"
   },
   "homepage": "https://github.com/grata-labs/gitcache-cli#readme",
-  "private": "false",
+  "private": false,
   "bin": {
     "gitcache": "dist/index.js"
   },
