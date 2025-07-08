@@ -1,0 +1,61 @@
+{
+  "name": "@grata-labs/gitcache-cli",
+  "version": "0.0.0",
+  "description": "GitCache – universal Git-dependency cache CLI",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/grata-labs/gitcache-cli.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/grata-labs/gitcache-cli/issues"
+  },
+  "homepage": "https://github.com/grata-labs/gitcache-cli#readme",
+  "private": "false",
+  "bin": {
+    "gitcache": "dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.3",
+    "@semantic-release/npm": "^12.0.2",
+    "@types/node": "^24.0.10",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.30.1",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-import": "^2.32.0",
+    "prettier": "^3.6.2",
+    "semantic-release": "^24.2.6",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
