@@ -14,6 +14,15 @@ export function cloneMirror(repoUrl: string, targetPath: string): void {
 }
 
 /**
+ * Update mirror repository and prune deleted branches
+ */
+export function updateAndPruneMirror(targetPath: string): void {
+  execSync(`git -C "${targetPath}" remote update --prune`, {
+    stdio: 'inherit',
+  });
+}
+
+/**
  * Repack a Git repository for optimization
  */
 export function repackRepository(targetPath: string): void {
