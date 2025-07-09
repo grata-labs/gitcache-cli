@@ -53,9 +53,8 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(results).toHaveLength(4);
       });
 
-      it.todo('should return same path for duplicate additions', () => {
-        // TODO: Implement idempotent behavior in Add command
-        // Currently the command fails if repository already exists
+      it('should return same path for duplicate additions', () => {
+        // Test idempotent behavior - adding the same repository twice should work
         const testRepo = ctx.testRepos.test;
 
         const firstAdd = addRepository(testRepo.url);

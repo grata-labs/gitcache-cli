@@ -31,7 +31,7 @@ export class Add extends BaseCommand {
       rmSync(targetPath, { recursive: true, force: true });
     }
 
-    // Clone the repository as a mirror (or skip if already exists and not forced)
+    // Clone the repository as a mirror if it doesn't exist
     if (!existsSync(targetPath)) {
       cloneMirror(repo, targetPath);
     }
@@ -48,7 +48,7 @@ export class Add extends BaseCommand {
       }
     }
 
-    // Optionally update and repack for optimization
+    // Optionally update and repack for optimization when force is used
     if (opts.force && existsSync(targetPath)) {
       updateAndPruneMirror(targetPath);
       repackRepository(targetPath);
