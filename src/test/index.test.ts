@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { addRepository, cacheRepository, main } from '../index.js';
+import { getTargetPath } from '../lib/utils/path.js';
+
+// Calculate expected hash for test repo
+const testRepo = 'https://github.com/user/repo.git';
+const expectedPath = getTargetPath(testRepo);
 
 // Mock the Add command
 vi.mock('../commands/add.js', () => ({
   Add: vi.fn().mockImplementation(() => ({
     exec: vi
       .fn()
-      .mockReturnValue(
-        '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-      ),
+      .mockReturnValue(expectedPath),
   })),
 }));
 
@@ -39,9 +42,7 @@ describe('gitcache CLI', () => {
       const MockAdd = vi.mocked(Add);
       const mockExec = vi
         .fn()
-        .mockReturnValue(
-          '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-        );
+        .mockReturnValue(expectedPath);
       MockAdd.mockImplementation(
         () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
       );
@@ -51,9 +52,7 @@ describe('gitcache CLI', () => {
 
       expect(MockAdd).toHaveBeenCalled();
       expect(mockExec).toHaveBeenCalledWith([repo], {});
-      expect(result).toBe(
-        '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-      );
+      expect(result).toBe(expectedPath);
     });
 
     it('should pass force option to Add command', async () => {
@@ -61,9 +60,7 @@ describe('gitcache CLI', () => {
       const MockAdd = vi.mocked(Add);
       const mockExec = vi
         .fn()
-        .mockReturnValue(
-          '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-        );
+        .mockReturnValue(expectedPath);
       MockAdd.mockImplementation(
         () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
       );
@@ -81,9 +78,7 @@ describe('gitcache CLI', () => {
       const MockAdd = vi.mocked(Add);
       const mockExec = vi
         .fn()
-        .mockReturnValue(
-          '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-        );
+        .mockReturnValue(expectedPath);
       MockAdd.mockImplementation(
         () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
       );
@@ -93,9 +88,7 @@ describe('gitcache CLI', () => {
 
       expect(MockAdd).toHaveBeenCalled();
       expect(mockExec).toHaveBeenCalledWith([repo], { force: true });
-      expect(result).toBe(
-        '/home/testuser/.gitcache/https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-      );
+      expect(result).toBe(expectedPath);
     });
   });
 

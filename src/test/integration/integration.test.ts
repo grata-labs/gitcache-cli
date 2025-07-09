@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 import { addRepository } from '../../lib/api.js';
+import { getRepoPath } from '../../lib/utils/path.js';
 import { useIntegrationTestSetup } from './shared-setup.js';
 
 describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
@@ -21,7 +22,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         // Verify caching worked
         expect(existsSync(repoPath)).toBe(true);
         expect(repoPath).toBe(
-          join(ctx.gitcacheDir, encodeURIComponent(testRepo.url))
+          join(ctx.gitcacheDir, getRepoPath(testRepo.url))
         );
 
         // Verify git integrity
