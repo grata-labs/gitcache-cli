@@ -29,12 +29,27 @@ function registerCommand(
     /* c8 ignore end */
   } else {
     // Default command pattern for add/cache commands
-    program
+    const cmd = program
       .command(`${name} <repo>`)
-      .description(config.description)
-      .option('-f, --force', 'overwrite existing mirror')
+      .description(config.description);
+
+    // Add options based on the command's static params
+    if (config.command.params) {
+      config.command.params.forEach((param: string) => {
+        if (param === 'force') {
+          cmd.option('-f, --force', 'overwrite existing mirror');
+        } else if (param === 'ref') {
+          cmd.option(
+            '-r, --ref <reference>',
+            'resolve git reference (tag/branch) to commit SHA'
+          );
+        }
+      });
+    }
+
+    cmd
       /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-      .action((repo: string, opts: { force?: boolean }) => {
+      .action((repo: string, opts: Record<string, unknown>) => {
         const instance = new config.command();
         instance.exec([repo], opts);
       });
@@ -69,12 +84,27 @@ function registerAliases(
             );
         } else {
           // Default alias pattern for add/cache commands
-          program
+          const aliasCmd = program
             .command(`${alias} <repo>`, { hidden: true })
-            .description(`Alias for '${mainCommand}' command`)
-            .option('-f, --force', 'overwrite existing mirror')
+            .description(`Alias for '${mainCommand}' command`);
+
+          // Add options based on the command's static params
+          if (config.command.params) {
+            config.command.params.forEach((param: string) => {
+              if (param === 'force') {
+                aliasCmd.option('-f, --force', 'overwrite existing mirror');
+              } else if (param === 'ref') {
+                aliasCmd.option(
+                  '-r, --ref <reference>',
+                  'resolve git reference (tag/branch) to commit SHA'
+                );
+              }
+            });
+          }
+
+          aliasCmd
             /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-            .action((repo: string, opts: { force?: boolean }) => {
+            .action((repo: string, opts: Record<string, unknown>) => {
               const instance = new config.command();
               instance.exec([repo], opts);
             })
