@@ -17,10 +17,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         const testRepo = ctx.testRepos.simple;
         const result = addRepository(testRepo.url);
 
-        const expectedPath = join(
-          ctx.gitcacheDir,
-          getRepoPath(testRepo.url)
-        );
+        const expectedPath = join(ctx.gitcacheDir, getRepoPath(testRepo.url));
         expect(result).toBe(expectedPath);
         expect(existsSync(expectedPath)).toBe(true);
       });
@@ -50,12 +47,10 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         // Verify all repositories were cached
         results.forEach(({ repo, path }) => {
           expect(existsSync(path)).toBe(true);
-          expect(path).toBe(
-            join(ctx.gitcacheDir, getRepoPath(repo.url))
-          );
+          expect(path).toBe(join(ctx.gitcacheDir, getRepoPath(repo.url)));
         });
 
-        expect(results).toHaveLength(3);
+        expect(results).toHaveLength(4);
       });
 
       it.todo('should return same path for duplicate additions', () => {

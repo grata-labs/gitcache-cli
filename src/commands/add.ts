@@ -1,5 +1,6 @@
 import { BaseCommand } from '../base-cmd.js';
 import { getTargetPath } from '../lib/utils/path.js';
+import { existsSync, rmSync } from 'node:fs';
 import {
   cloneMirror,
   updateAndPruneMirror,
@@ -25,8 +26,15 @@ export class Add extends BaseCommand {
     const [repo] = args;
     const targetPath = getTargetPath(repo);
 
-    // Clone the repository as a mirror
-    cloneMirror(repo, targetPath);
+    // Handle force flag: remove existing repository if it exists
+    if (opts.force && existsSync(targetPath)) {
+      rmSync(targetPath, { recursive: true, force: true });
+    }
+
+    // Clone the repository as a mirror (or skip if already exists and not forced)
+    if (!existsSync(targetPath)) {
+      cloneMirror(repo, targetPath);
+    }
 
     // Resolve and log reference if specified
     if (opts.ref) {
@@ -41,7 +49,7 @@ export class Add extends BaseCommand {
     }
 
     // Optionally update and repack for optimization
-    if (opts.force) {
+    if (opts.force && existsSync(targetPath)) {
       updateAndPruneMirror(targetPath);
       repackRepository(targetPath);
     }
