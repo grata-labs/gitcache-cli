@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 /**
  * Get the cache directory path
@@ -12,10 +13,10 @@ export function getCacheDir(): string {
 }
 
 /**
- * Generate a safe filename from a repository URL
+ * Generate a safe filename from a repository URL using SHA-256 hash
  */
 export function getRepoPath(repoUrl: string): string {
-  return encodeURIComponent(repoUrl);
+  return createHash('sha256').update(repoUrl).digest('hex');
 }
 
 /**

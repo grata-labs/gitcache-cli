@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 import { addRepository } from '../../lib/api.js';
+import { getRepoPath } from '../../lib/utils/path.js';
 import { useIntegrationTestSetup } from './shared-setup.js';
 
 describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
@@ -18,7 +19,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
 
         const expectedPath = join(
           ctx.gitcacheDir,
-          encodeURIComponent(testRepo.url)
+          getRepoPath(testRepo.url)
         );
         expect(result).toBe(expectedPath);
         expect(existsSync(expectedPath)).toBe(true);
@@ -50,7 +51,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         results.forEach(({ repo, path }) => {
           expect(existsSync(path)).toBe(true);
           expect(path).toBe(
-            join(ctx.gitcacheDir, encodeURIComponent(repo.url))
+            join(ctx.gitcacheDir, getRepoPath(repo.url))
           );
         });
 
@@ -99,9 +100,9 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         const result = addRepository(testRepo.url);
         expect(existsSync(result)).toBe(true);
 
-        // Verify URL encoding in path
-        const encodedUrl = encodeURIComponent(testRepo.url);
-        expect(result).toContain(encodedUrl);
+        // Verify SHA-256 hash in path
+        const hashedPath = getRepoPath(testRepo.url);
+        expect(result).toContain(hashedPath);
       });
     });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { join } from 'node:path';
 import { Add } from '../../commands/add.js';
+import { getTargetPath } from '../../lib/utils/path.js';
 
 vi.mock('../../lib/utils/git.js', () => ({
   cloneMirror: vi.fn(),
@@ -21,11 +21,7 @@ describe('Add command', () => {
 
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
-    const expectedTarget = join(
-      '/home/testuser',
-      '.gitcache',
-      'https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-    );
+    const expectedTarget = getTargetPath(repo);
 
     const result = add.exec([repo]);
 
@@ -42,11 +38,7 @@ describe('Add command', () => {
 
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
-    const expectedTarget = join(
-      '/home/testuser',
-      '.gitcache',
-      'https%3A%2F%2Fgithub.com%2Fuser%2Frepo.git'
-    );
+    const expectedTarget = getTargetPath(repo);
 
     add.exec([repo], { force: true });
 
@@ -92,11 +84,7 @@ describe('Add command', () => {
 
     const add = new Add();
     const repo = 'git@github.com:org/repo-with-dashes.git';
-    const expectedTarget = join(
-      '/home/testuser',
-      '.gitcache',
-      'git%40github.com%3Aorg%2Frepo-with-dashes.git'
-    );
+    const expectedTarget = getTargetPath(repo);
 
     const result = add.exec([repo]);
 
