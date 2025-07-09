@@ -1,4 +1,5 @@
 import { Add } from '../commands/add.js';
+import { Install } from '../commands/install.js';
 import type { CommandConfig } from './types.js';
 
 /**
@@ -9,5 +10,10 @@ export const commands: Record<string, CommandConfig> = {
     command: Add,
     description: Add.description,
     aliases: ['cache'],
+  },
+  install: {
+    command: Install,
+    description: Install.description,
+    aliases: ['i'],
   },
 };

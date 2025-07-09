@@ -25,6 +25,16 @@ gitcache cache https://github.com/user/repo.git
 gitcache cache https://github.com/user/repo.git --force
 ```
 
+### Install npm packages with gitcache
+
+```bash
+# Use gitcache as npm cache for faster installs
+gitcache install
+
+# Install dev dependencies using the 'i' alias
+gitcache i --save-dev typescript @types/node
+```
+
 ### Get help
 
 ```bash

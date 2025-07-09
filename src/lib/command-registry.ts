@@ -16,14 +16,30 @@ function registerCommand(
   name: string,
   config: CommandConfig
 ): void {
-  program
-    .command(`${name} <repo>`)
-    .description(config.description)
-    .option('-f, --force', 'overwrite existing mirror')
-    .action((repo: string, opts: { force?: boolean }) => {
-      const instance = new config.command();
-      instance.exec([repo], opts);
-    });
+  // Handle install command differently (accepts variable arguments)
+  if (name === 'install') {
+    program
+      .command(`${name} [args...]`)
+      .description(config.description)
+      /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
+      .action((args: string[] = []) => {
+        const instance = new config.command();
+        instance.exec(args);
+      });
+    /* c8 ignore end */
+  } else {
+    // Default command pattern for add/cache commands
+    program
+      .command(`${name} <repo>`)
+      .description(config.description)
+      .option('-f, --force', 'overwrite existing mirror')
+      /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
+      .action((repo: string, opts: { force?: boolean }) => {
+        const instance = new config.command();
+        instance.exec([repo], opts);
+      });
+    /* c8 ignore end */
+  }
 }
 
 /**
@@ -36,18 +52,38 @@ function registerAliases(
   Object.entries(commands).forEach(([mainCommand, config]) => {
     if (config.aliases) {
       config.aliases.forEach((alias) => {
-        program
-          .command(`${alias} <repo>`, { hidden: true })
-          .description(`Alias for '${mainCommand}' command`)
-          .option('-f, --force', 'overwrite existing mirror')
-          .action((repo: string, opts: { force?: boolean }) => {
-            const instance = new config.command();
-            instance.exec([repo], opts);
-          })
-          .addHelpText(
-            'after',
-            `\nNote: This is an alias for 'gitcache ${mainCommand}'. Use 'gitcache ${mainCommand} --help' for full documentation.`
-          );
+        // Handle install aliases differently (accepts variable arguments)
+        if (mainCommand === 'install') {
+          program
+            .command(`${alias} [args...]`, { hidden: true })
+            .description(`Alias for '${mainCommand}' command`)
+            /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
+            .action((args: string[] = []) => {
+              const instance = new config.command();
+              instance.exec(args);
+            })
+            /* c8 ignore end */
+            .addHelpText(
+              'after',
+              `\nNote: This is an alias for 'gitcache ${mainCommand}'. Use 'gitcache ${mainCommand} --help' for full documentation.`
+            );
+        } else {
+          // Default alias pattern for add/cache commands
+          program
+            .command(`${alias} <repo>`, { hidden: true })
+            .description(`Alias for '${mainCommand}' command`)
+            .option('-f, --force', 'overwrite existing mirror')
+            /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
+            .action((repo: string, opts: { force?: boolean }) => {
+              const instance = new config.command();
+              instance.exec([repo], opts);
+            })
+            /* c8 ignore end */
+            .addHelpText(
+              'after',
+              `\nNote: This is an alias for 'gitcache ${mainCommand}'. Use 'gitcache ${mainCommand} --help' for full documentation.`
+            );
+        }
       });
     }
   });
