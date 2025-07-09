@@ -4,11 +4,24 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Ensure sequential execution when debugging
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork:
+          process.env.NODE_ENV === 'test' && process.argv.includes('--inspect'),
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/*.spec.ts', 'src/test/**', 'src/**/types.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/*.spec.ts',
+        'src/test/**',
+        'src/**/types.ts',
+      ],
       // 100% coverage requirement
       thresholds: {
         lines: 100,
