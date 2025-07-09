@@ -302,4 +302,29 @@ describe('Add command', () => {
     expect(mockRepackRepository).toHaveBeenCalledWith(expectedTarget);
     expect(result).toBe(expectedTarget);
   });
+
+  it('should be idempotent when repository already exists (no force)', async () => {
+    const { cloneMirror, updateAndPruneMirror, repackRepository } =
+      await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
+    const mockRepackRepository = vi.mocked(repackRepository);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return true (repository already exists)
+    mockExistsSync.mockReturnValue(true);
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = add.exec([repo]);
+
+    // Should return path without cloning or updating since repo already exists
+    expect(mockCloneMirror).not.toHaveBeenCalled();
+    expect(mockUpdateAndPruneMirror).not.toHaveBeenCalled();
+    expect(mockRepackRepository).not.toHaveBeenCalled();
+    expect(result).toBe(expectedTarget);
+  });
 });
