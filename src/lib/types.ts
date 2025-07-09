@@ -11,6 +11,7 @@ export interface CommandClass {
   };
   description: string;
   commandName: string;
+  params?: string[];
 }
 
 /**
