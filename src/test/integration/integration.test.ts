@@ -21,9 +21,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
 
         // Verify caching worked
         expect(existsSync(repoPath)).toBe(true);
-        expect(repoPath).toBe(
-          join(ctx.gitcacheDir, getRepoPath(testRepo.url))
-        );
+        expect(repoPath).toBe(join(ctx.gitcacheDir, getRepoPath(testRepo.url)));
 
         // Verify git integrity
         const result = execSync(`git -C "${repoPath}" log --oneline`, {
@@ -46,7 +44,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         });
 
         // Verify cache directory structure
-        expect(results).toHaveLength(3);
+        expect(results).toHaveLength(4);
         expect(existsSync(ctx.gitcacheDir)).toBe(true);
       });
 

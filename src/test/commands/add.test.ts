@@ -9,6 +9,11 @@ vi.mock('../../lib/utils/git.js', () => ({
   resolveRef: vi.fn(),
 }));
 
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
+  rmSync: vi.fn(),
+}));
+
 const originalEnv = process.env;
 
 beforeEach(() => {
@@ -19,7 +24,12 @@ beforeEach(() => {
 describe('Add command', () => {
   it('should execute git clone --mirror with correct target path', async () => {
     const { cloneMirror } = await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
 
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
@@ -34,9 +44,17 @@ describe('Add command', () => {
   it('should execute update and repack when force option is true', async () => {
     const { cloneMirror, updateAndPruneMirror, repackRepository } =
       await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false for force check, false for clone check, then true for update check
+    mockExistsSync
+      .mockReturnValueOnce(false) // First call: force check - no existing repo to remove
+      .mockReturnValueOnce(false) // Second call: clone check - no existing repo, so clone
+      .mockReturnValue(true); // Third call: force update check - repo exists after cloning
 
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
@@ -52,9 +70,14 @@ describe('Add command', () => {
   it('should not execute update and repack when force option is false', async () => {
     const { cloneMirror, updateAndPruneMirror, repackRepository } =
       await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo to clone)
+    mockExistsSync.mockReturnValue(false);
 
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
@@ -69,9 +92,14 @@ describe('Add command', () => {
   it('should not execute update and repack when no options provided', async () => {
     const { cloneMirror, updateAndPruneMirror, repackRepository } =
       await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo to clone)
+    mockExistsSync.mockReturnValue(false);
 
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
@@ -85,7 +113,12 @@ describe('Add command', () => {
 
   it('should handle complex repository URLs correctly', async () => {
     const { cloneMirror } = await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
 
     const add = new Add();
     const repo = 'git@github.com:org/repo-with-dashes.git';
@@ -105,8 +138,13 @@ describe('Add command', () => {
 
   it('should resolve reference when ref option is provided', async () => {
     const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -130,8 +168,13 @@ describe('Add command', () => {
 
   it('should handle ref resolution errors gracefully', async () => {
     const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
 
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -159,15 +202,23 @@ describe('Add command', () => {
   it('should work with both force and ref options together', async () => {
     const { cloneMirror, updateAndPruneMirror, repackRepository, resolveRef } =
       await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
     const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     const mockSha = 'b2c3d4e5f6789012345678901234567890abcdef';
     mockResolveRef.mockReturnValue(mockSha);
+
+    // Mock existsSync to return false for force check, false for clone check, then true for update check
+    mockExistsSync
+      .mockReturnValueOnce(false) // First call: force check - no existing repo to remove
+      .mockReturnValueOnce(false) // Second call: clone check - no existing repo, so clone
+      .mockReturnValue(true); // Third call: force update check - repo exists after cloning
 
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
@@ -188,8 +239,13 @@ describe('Add command', () => {
 
   it('should handle non-Error exceptions during ref resolution', async () => {
     const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
     const mockCloneMirror = vi.mocked(cloneMirror);
     const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -213,5 +269,37 @@ describe('Add command', () => {
     expect(result).toBe(expectedTarget);
 
     warnSpy.mockRestore();
+  });
+
+  it('should remove existing repository when force option is used', async () => {
+    const { cloneMirror, updateAndPruneMirror, repackRepository } =
+      await import('../../lib/utils/git.js');
+    const { existsSync, rmSync } = await import('node:fs');
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
+    const mockRepackRepository = vi.mocked(repackRepository);
+    const mockExistsSync = vi.mocked(existsSync);
+    const mockRmSync = vi.mocked(rmSync);
+
+    // Mock existsSync to return true initially (existing repo), false after removal, then true after cloning
+    mockExistsSync
+      .mockReturnValueOnce(true) // Initial check for force removal
+      .mockReturnValueOnce(false) // Check before cloning
+      .mockReturnValue(true); // Check after cloning for force update
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = add.exec([repo], { force: true });
+
+    expect(mockRmSync).toHaveBeenCalledWith(expectedTarget, {
+      recursive: true,
+      force: true,
+    });
+    expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockUpdateAndPruneMirror).toHaveBeenCalledWith(expectedTarget);
+    expect(mockRepackRepository).toHaveBeenCalledWith(expectedTarget);
+    expect(result).toBe(expectedTarget);
   });
 });

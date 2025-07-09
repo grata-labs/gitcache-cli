@@ -51,7 +51,10 @@ function registerCommand(
       /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
       .action((repo: string, opts: Record<string, unknown>) => {
         const instance = new config.command();
-        instance.exec([repo], opts);
+        const result = instance.exec([repo], opts);
+        if (result !== undefined && result !== null) {
+          console.log(result);
+        }
       });
     /* c8 ignore end */
   }
@@ -106,7 +109,10 @@ function registerAliases(
             /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
             .action((repo: string, opts: Record<string, unknown>) => {
               const instance = new config.command();
-              instance.exec([repo], opts);
+              const result = instance.exec([repo], opts);
+              if (result !== undefined && result !== null) {
+                console.log(result);
+              }
             })
             /* c8 ignore end */
             .addHelpText(
