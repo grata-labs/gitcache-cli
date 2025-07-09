@@ -2,6 +2,7 @@ import { BaseCommand } from '../base-cmd.js';
 import { getTargetPath } from '../lib/utils/path.js';
 import {
   cloneMirror,
+  updateAndPruneMirror,
   repackRepository,
   type GitCacheOptions,
 } from '../lib/utils/git.js';
@@ -26,8 +27,9 @@ export class Add extends BaseCommand {
     // Clone the repository as a mirror
     cloneMirror(repo, targetPath);
 
-    // Optionally repack for optimization
+    // Optionally update and repack for optimization
     if (opts.force) {
+      updateAndPruneMirror(targetPath);
       repackRepository(targetPath);
     }
 

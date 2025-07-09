@@ -4,6 +4,7 @@ import { getTargetPath } from '../../lib/utils/path.js';
 
 vi.mock('../../lib/utils/git.js', () => ({
   cloneMirror: vi.fn(),
+  updateAndPruneMirror: vi.fn(),
   repackRepository: vi.fn(),
 }));
 
@@ -29,11 +30,11 @@ describe('Add command', () => {
     expect(result).toBe(expectedTarget);
   });
 
-  it('should execute repack when force option is true', async () => {
-    const { cloneMirror, repackRepository } = await import(
-      '../../lib/utils/git.js'
-    );
+  it('should execute update and repack when force option is true', async () => {
+    const { cloneMirror, updateAndPruneMirror, repackRepository } =
+      await import('../../lib/utils/git.js');
     const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
 
     const add = new Add();
@@ -43,14 +44,15 @@ describe('Add command', () => {
     add.exec([repo], { force: true });
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockUpdateAndPruneMirror).toHaveBeenCalledWith(expectedTarget);
     expect(mockRepackRepository).toHaveBeenCalledWith(expectedTarget);
   });
 
-  it('should not execute repack when force option is false', async () => {
-    const { cloneMirror, repackRepository } = await import(
-      '../../lib/utils/git.js'
-    );
+  it('should not execute update and repack when force option is false', async () => {
+    const { cloneMirror, updateAndPruneMirror, repackRepository } =
+      await import('../../lib/utils/git.js');
     const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
 
     const add = new Add();
@@ -59,14 +61,15 @@ describe('Add command', () => {
     add.exec([repo], { force: false });
 
     expect(mockCloneMirror).toHaveBeenCalledTimes(1);
+    expect(mockUpdateAndPruneMirror).not.toHaveBeenCalled();
     expect(mockRepackRepository).not.toHaveBeenCalled();
   });
 
-  it('should not execute repack when no options provided', async () => {
-    const { cloneMirror, repackRepository } = await import(
-      '../../lib/utils/git.js'
-    );
+  it('should not execute update and repack when no options provided', async () => {
+    const { cloneMirror, updateAndPruneMirror, repackRepository } =
+      await import('../../lib/utils/git.js');
     const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockUpdateAndPruneMirror = vi.mocked(updateAndPruneMirror);
     const mockRepackRepository = vi.mocked(repackRepository);
 
     const add = new Add();
@@ -75,6 +78,7 @@ describe('Add command', () => {
     add.exec([repo]);
 
     expect(mockCloneMirror).toHaveBeenCalledTimes(1);
+    expect(mockUpdateAndPruneMirror).not.toHaveBeenCalled();
     expect(mockRepackRepository).not.toHaveBeenCalled();
   });
 
