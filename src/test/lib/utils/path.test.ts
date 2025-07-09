@@ -5,6 +5,7 @@ import {
   getCacheDir,
   getRepoPath,
   getTargetPath,
+  normalizeRepoUrl,
 } from '../../../lib/utils/path.js';
 
 const originalEnv = process.env;
@@ -30,39 +31,107 @@ describe('path utilities', () => {
     });
   });
 
+  describe('normalizeRepoUrl', () => {
+    it('should respect protocol choice while normalizing format variations', () => {
+      // HTTPS variations should normalize to same HTTPS URL
+      expect(normalizeRepoUrl('https://github.com/User/Repo.git/')).toBe(
+        'https://github.com/user/repo'
+      );
+      expect(normalizeRepoUrl('git+https://github.com/User/Repo.git')).toBe(
+        'https://github.com/user/repo'
+      );
+      expect(normalizeRepoUrl('https://github.com/user/repo/')).toBe(
+        'https://github.com/user/repo'
+      );
+
+      // SSH variations should normalize to same SSH URL
+      expect(normalizeRepoUrl('git@github.com:User/Repo.git')).toBe(
+        'ssh://git@github.com/user/repo'
+      );
+      expect(normalizeRepoUrl('git+ssh://git@github.com/User/Repo.git')).toBe(
+        'ssh://git@github.com/user/repo'
+      );
+    });
+
+    it('should default GitHub shortcuts to HTTPS', () => {
+      expect(normalizeRepoUrl('github:User/Repo')).toBe(
+        'https://github.com/user/repo'
+      );
+    });
+
+    it('should handle GitLab URLs while preserving protocol', () => {
+      expect(normalizeRepoUrl('git@gitlab.com:User/Repo.git')).toBe(
+        'ssh://git@gitlab.com/user/repo'
+      );
+      expect(normalizeRepoUrl('https://gitlab.com/User/Repo.git')).toBe(
+        'https://gitlab.com/user/repo'
+      );
+    });
+
+    it('should not break on non-github URLs', () => {
+      expect(normalizeRepoUrl('https://bitbucket.org/user/repo.git')).toBe(
+        'https://bitbucket.org/user/repo'
+      );
+      expect(normalizeRepoUrl('git@bitbucket.org:user/repo.git')).toBe(
+        'ssh://git@bitbucket.org/user/repo'
+      );
+    });
+  });
+
   describe('getRepoPath', () => {
-    it('should generate SHA-256 hash for repository URLs', () => {
+    it('should generate SHA-256 hash for normalized repository URLs', () => {
       const repo = 'https://github.com/user/repo.git';
-      const expectedHash = createHash('sha256').update(repo).digest('hex');
+      const normalized = normalizeRepoUrl(repo);
+      const expectedHash = createHash('sha256')
+        .update(normalized)
+        .digest('hex');
       expect(getRepoPath(repo)).toBe(expectedHash);
     });
 
-    it('should handle SSH URLs with special characters', () => {
-      const repo = 'git@github.com:user/repo.git';
-      const expectedHash = createHash('sha256').update(repo).digest('hex');
-      expect(getRepoPath(repo)).toBe(expectedHash);
+    it('should generate different hashes for same repo with different protocols', () => {
+      // SSH and HTTPS should generate different cache keys (respecting user choice)
+      const httpsUrl = 'https://github.com/user/repo.git';
+      const sshUrl = 'git@github.com:user/repo.git';
+      expect(getRepoPath(httpsUrl)).not.toBe(getRepoPath(sshUrl));
     });
 
-    it('should generate different hashes for different URLs', () => {
+    it('should generate the same hash for equivalent URLs within same protocol', () => {
+      // HTTPS variations should generate same hash
+      const httpsUrls = [
+        'https://github.com/user/repo.git',
+        'https://github.com/user/repo/',
+        'git+https://github.com/user/repo.git',
+        'https://github.com/user/repo',
+      ];
+      const httpsHashes = httpsUrls.map(getRepoPath);
+      httpsHashes.forEach((h) => expect(h).toBe(httpsHashes[0]));
+
+      // SSH variations should generate same hash
+      const sshUrls = [
+        'git@github.com:user/repo.git',
+        'git+ssh://git@github.com/user/repo.git',
+      ];
+      const sshHashes = sshUrls.map(getRepoPath);
+      sshHashes.forEach((h) => expect(h).toBe(sshHashes[0]));
+    });
+
+    it('should generate different hashes for different repos', () => {
       const repo1 = 'https://github.com/user/repo1.git';
       const repo2 = 'https://github.com/user/repo2.git';
       expect(getRepoPath(repo1)).not.toBe(getRepoPath(repo2));
     });
 
-    it('should generate consistent hashes for same URL', () => {
-      const repo = 'https://github.com/user/repo.git';
-      expect(getRepoPath(repo)).toBe(getRepoPath(repo));
-    });
-
     it('should handle very long URLs without path length issues', () => {
-      const longRepo = 'https://github.com/very-long-organization-name/very-long-repository-name-with-many-words-and-dashes.git';
+      const longRepo =
+        'https://github.com/very-long-organization-name/very-long-repository-name-with-many-words-and-dashes.git';
       const hash = getRepoPath(longRepo);
-      expect(hash).toHaveLength(64); // SHA-256 hex digest is always 64 characters
-      expect(hash).toMatch(/^[a-f0-9]{64}$/); // Should be valid hex
+      expect(hash).toHaveLength(64);
+      expect(hash).toMatch(/^[a-f0-9]{64}$/);
     });
 
     it('should handle URLs with special characters safely', () => {
-      const specialRepo = 'https://github.com/user/repo with spaces & symbols!@#$%^&*().git';
+      const specialRepo =
+        'https://github.com/user/repo with spaces & symbols!@#$%^&*().git';
       const hash = getRepoPath(specialRepo);
       expect(hash).toHaveLength(64);
       expect(hash).toMatch(/^[a-f0-9]{64}$/);
@@ -73,9 +142,11 @@ describe('path utilities', () => {
     it('should combine cache directory with SHA-256 hash', () => {
       process.env.HOME = '/home/testuser';
       const repo = 'https://github.com/user/repo.git';
-      const expectedHash = createHash('sha256').update(repo).digest('hex');
+      const normalized = normalizeRepoUrl(repo);
+      const expectedHash = createHash('sha256')
+        .update(normalized)
+        .digest('hex');
       const expected = join('/home/testuser', '.gitcache', expectedHash);
-
       expect(getTargetPath(repo)).toBe(expected);
     });
   });
