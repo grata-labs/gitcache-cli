@@ -13,18 +13,18 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
     const ctx = useIntegrationTestSetup();
 
     describe('API: addRepository()', () => {
-      it('should clone and cache a repository via API', () => {
+      it('should clone and cache a repository via API', async () => {
         const testRepo = ctx.testRepos.simple;
-        const result = addRepository(testRepo.url);
+        const result = await addRepository(testRepo.url);
 
         const expectedPath = join(ctx.gitcacheDir, getRepoPath(testRepo.url));
         expect(result).toBe(expectedPath);
         expect(existsSync(expectedPath)).toBe(true);
       });
 
-      it('should create bare repository structure', () => {
+      it('should create bare repository structure', async () => {
         const testRepo = ctx.testRepos.simple;
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
 
         // Verify bare repository structure
         expect(existsSync(join(repoPath, 'HEAD'))).toBe(true);
@@ -36,13 +36,15 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(existsSync(join(repoPath, 'README.md'))).toBe(false);
       });
 
-      it('should handle multiple repository additions', () => {
+      it('should handle multiple repository additions', async () => {
         // Add all repositories
-        const results = Object.entries(ctx.testRepos).map(([name, repo]) => ({
-          name,
-          repo,
-          path: addRepository(repo.url),
-        }));
+        const results = await Promise.all(
+          Object.entries(ctx.testRepos).map(async ([name, repo]) => ({
+            name,
+            repo,
+            path: await addRepository(repo.url),
+          }))
+        );
 
         // Verify all repositories were cached
         results.forEach(({ repo, path }) => {
@@ -53,20 +55,20 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(results).toHaveLength(4);
       });
 
-      it('should return same path for duplicate additions', () => {
+      it('should return same path for duplicate additions', async () => {
         // Test idempotent behavior - adding the same repository twice should work
         const testRepo = ctx.testRepos.test;
 
-        const firstAdd = addRepository(testRepo.url);
-        const secondAdd = addRepository(testRepo.url);
+        const firstAdd = await addRepository(testRepo.url);
+        const secondAdd = await addRepository(testRepo.url);
 
         expect(firstAdd).toBe(secondAdd);
         expect(existsSync(firstAdd)).toBe(true);
       });
 
-      it('should maintain git repository integrity', () => {
+      it('should maintain git repository integrity', async () => {
         const testRepo = ctx.testRepos.demo;
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
 
         // Should be able to run git commands on cached repository
         const logResult = execSync(`git -C "${repoPath}" log --oneline`, {
@@ -87,11 +89,11 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(branchResult.trim()).toContain('main');
       });
 
-      it('should handle file:// URLs correctly', () => {
+      it('should handle file:// URLs correctly', async () => {
         const testRepo = ctx.testRepos.simple;
         expect(testRepo.url).toMatch(/^file:\/\//);
 
-        const result = addRepository(testRepo.url);
+        const result = await addRepository(testRepo.url);
         expect(existsSync(result)).toBe(true);
 
         // Verify SHA-256 hash in path
@@ -101,16 +103,16 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
     });
 
     describe('Error Handling', () => {
-      it('should handle invalid repository URLs', () => {
+      it('should handle invalid repository URLs', async () => {
         const invalidUrl = 'file:///nonexistent/path';
 
-        expect(() => addRepository(invalidUrl)).toThrow();
+        await expect(addRepository(invalidUrl)).rejects.toThrow();
       });
 
-      it('should handle malformed URLs gracefully', () => {
+      it('should handle malformed URLs gracefully', async () => {
         const malformedUrl = 'not-a-valid-url';
 
-        expect(() => addRepository(malformedUrl)).toThrow();
+        await expect(addRepository(malformedUrl)).rejects.toThrow();
       });
     });
   }

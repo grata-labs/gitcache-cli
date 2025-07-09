@@ -12,10 +12,10 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
     const ctx = useIntegrationTestSetup();
 
     describe('Complex Repository Handling', () => {
-      it('should handle repositories with multiple branches', () => {
+      it('should handle repositories with multiple branches', async () => {
         // Use our complex test repository with multiple branches
         const testRepo = ctx.testRepos.complex;
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
 
         expect(existsSync(repoPath)).toBe(true);
 
@@ -29,9 +29,9 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(branches).toContain('feature/test');
       });
 
-      it('should handle repositories with tags', () => {
+      it('should handle repositories with tags', async () => {
         const testRepo = ctx.testRepos.complex;
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
 
         // Check for tags
         const tags = execSync(`git -C "${repoPath}" tag`, {
@@ -43,12 +43,12 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(tags).toContain('v1.1.0');
       });
 
-      it('should handle SSH URLs correctly', () => {
+      it('should handle SSH URLs correctly', async () => {
         // Test with file:// URL since SSH requires authentication
         const testRepo = ctx.testRepos.simple;
         expect(testRepo.url).toMatch(/^file:\/\//);
 
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
         expect(existsSync(repoPath)).toBe(true);
 
         // Verify the repository structure
@@ -56,7 +56,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(existsSync(join(repoPath, 'config'))).toBe(true);
       });
 
-      it('should handle repository URLs with .git extension and without', () => {
+      it('should handle repository URLs with .git extension and without', async () => {
         // Test that URL normalization treats .git and non-.git URLs the same
         // This is the intended behavior - they should map to the same cache entry
         const baseUrl = 'file:///tmp/test-repo';
@@ -71,15 +71,15 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
 
         // Both should be valid cache paths when using the test repo
         const testRepo = ctx.testRepos.simple;
-        const repoPath1 = addRepository(testRepo.url);
+        const repoPath1 = await addRepository(testRepo.url);
         expect(existsSync(repoPath1)).toBe(true);
       });
 
-      it('should handle force update on existing repository', () => {
+      it('should handle force update on existing repository', async () => {
         const testRepo = ctx.testRepos.simple;
 
         // First clone
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
         expect(existsSync(repoPath)).toBe(true);
 
         // Force update (should trigger repack)
@@ -99,7 +99,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(logResult.trim().length).toBeGreaterThan(0);
       });
 
-      it('should handle concurrent repository additions', () => {
+      it('should handle concurrent repository additions', async () => {
         // Test adding different repositories in quick succession
         const repos = [
           ctx.testRepos.simple,
@@ -107,10 +107,12 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
           ctx.testRepos.demo,
         ];
 
-        const results = repos.map((repo) => ({
-          url: repo.url,
-          path: addRepository(repo.url),
-        }));
+        const results = await Promise.all(
+          repos.map(async (repo) => ({
+            url: repo.url,
+            path: await addRepository(repo.url),
+          }))
+        );
 
         // All should succeed
         results.forEach(({ path }) => {
@@ -124,9 +126,9 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(uniquePaths.size).toBe(paths.length);
       });
 
-      it('should maintain repository integrity after multiple operations', () => {
+      it('should maintain repository integrity after multiple operations', async () => {
         const testRepo = ctx.testRepos.demo;
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
 
         // Perform multiple git operations
         const operations = [
@@ -149,12 +151,12 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(config.trim()).toBe('true');
       });
 
-      it('should handle large repository scenarios gracefully', () => {
+      it('should handle large repository scenarios gracefully', async () => {
         // Use our complex test repository which has multiple branches and tags
         const testRepo = ctx.testRepos.complex;
 
         const startTime = Date.now();
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
         const duration = Date.now() - startTime;
 
         expect(existsSync(repoPath)).toBe(true);

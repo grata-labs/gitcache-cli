@@ -43,17 +43,23 @@ function registerCommand(
             '-r, --ref <reference>',
             'resolve git reference (tag/branch) to commit SHA'
           );
+        } else if (param === 'build') {
+          cmd.option('-b, --build', 'build and cache npm tarball');
         }
       });
     }
 
     cmd
       /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-      .action((repo: string, opts: Record<string, unknown>) => {
+      .action(async (repo: string, opts: Record<string, unknown>) => {
         const instance = new config.command();
         const result = instance.exec([repo], opts);
-        if (result !== undefined && result !== null) {
-          console.log(result);
+
+        // Handle both sync and async commands
+        const finalResult = result instanceof Promise ? await result : result;
+
+        if (finalResult !== undefined && finalResult !== null) {
+          console.log(finalResult);
         }
       });
     /* c8 ignore end */
@@ -101,17 +107,24 @@ function registerAliases(
                   '-r, --ref <reference>',
                   'resolve git reference (tag/branch) to commit SHA'
                 );
+              } else if (param === 'build') {
+                aliasCmd.option('-b, --build', 'build and cache npm tarball');
               }
             });
           }
 
           aliasCmd
             /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-            .action((repo: string, opts: Record<string, unknown>) => {
+            .action(async (repo: string, opts: Record<string, unknown>) => {
               const instance = new config.command();
               const result = instance.exec([repo], opts);
-              if (result !== undefined && result !== null) {
-                console.log(result);
+
+              // Handle both sync and async commands
+              const finalResult =
+                result instanceof Promise ? await result : result;
+
+              if (finalResult !== undefined && finalResult !== null) {
+                console.log(finalResult);
               }
             })
             /* c8 ignore end */

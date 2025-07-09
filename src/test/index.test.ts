@@ -10,9 +10,7 @@ const expectedPath = getTargetPath(testRepo);
 // Mock the Add command
 vi.mock('../commands/add.js', () => ({
   Add: vi.fn().mockImplementation(() => ({
-    exec: vi
-      .fn()
-      .mockReturnValue(expectedPath),
+    exec: vi.fn().mockReturnValue(expectedPath),
   })),
 }));
 
@@ -48,15 +46,13 @@ describe('gitcache CLI', () => {
     it('should delegate to Add command and return target path', async () => {
       const { Add } = await import('../commands/add.js');
       const MockAdd = vi.mocked(Add);
-      const mockExec = vi
-        .fn()
-        .mockReturnValue(expectedPath);
+      const mockExec = vi.fn().mockResolvedValue(expectedPath);
       MockAdd.mockImplementation(
         () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
       );
 
       const repo = 'https://github.com/user/repo.git';
-      const result = addRepository(repo);
+      const result = await addRepository(repo);
 
       expect(MockAdd).toHaveBeenCalled();
       expect(mockExec).toHaveBeenCalledWith([repo], {});
@@ -66,9 +62,7 @@ describe('gitcache CLI', () => {
     it('should pass force option to Add command', async () => {
       const { Add } = await import('../commands/add.js');
       const MockAdd = vi.mocked(Add);
-      const mockExec = vi
-        .fn()
-        .mockReturnValue(expectedPath);
+      const mockExec = vi.fn().mockReturnValue(expectedPath);
       MockAdd.mockImplementation(
         () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
       );
@@ -84,15 +78,13 @@ describe('gitcache CLI', () => {
     it('should work as an alias for addRepository', async () => {
       const { Add } = await import('../commands/add.js');
       const MockAdd = vi.mocked(Add);
-      const mockExec = vi
-        .fn()
-        .mockReturnValue(expectedPath);
+      const mockExec = vi.fn().mockResolvedValue(expectedPath);
       MockAdd.mockImplementation(
         () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
       );
 
       const repo = 'https://github.com/user/repo.git';
-      const result = cacheRepository(repo, { force: true });
+      const result = await cacheRepository(repo, { force: true });
 
       expect(MockAdd).toHaveBeenCalled();
       expect(mockExec).toHaveBeenCalledWith([repo], { force: true });
@@ -167,7 +159,8 @@ describe('gitcache CLI', () => {
         () => ({ exec: mockAddExec }) as unknown as InstanceType<typeof Add>
       );
       MockInstall.mockImplementation(
-        () => ({ exec: mockInstallExec }) as unknown as InstanceType<typeof Install>
+        () =>
+          ({ exec: mockInstallExec }) as unknown as InstanceType<typeof Install>
       );
 
       await main();
@@ -260,7 +253,8 @@ describe('gitcache CLI', () => {
         () => ({ exec: mockAddExec }) as unknown as InstanceType<typeof Add>
       );
       MockInstall.mockImplementation(
-        () => ({ exec: mockInstallExec }) as unknown as InstanceType<typeof Install>
+        () =>
+          ({ exec: mockInstallExec }) as unknown as InstanceType<typeof Install>
       );
 
       await main();
@@ -272,7 +266,7 @@ describe('gitcache CLI', () => {
       expect(commandNames).toContain('add <repo>');
       expect(commandNames).toContain('install [args...]');
       expect(commandNames).toContain('cache <repo>');
-      expect(commandNames).toContain('i [args...]');  // Install alias uses [args...] pattern
+      expect(commandNames).toContain('i [args...]'); // Install alias uses [args...] pattern
       expect(commandNames).toHaveLength(4);
 
       // Verify that cache is registered as hidden

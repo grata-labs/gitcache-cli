@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Add } from '../../commands/add.js';
 import { getTargetPath } from '../../lib/utils/path.js';
+import { TarballBuilder } from '../../lib/tarball-builder.js';
 
 vi.mock('../../lib/utils/git.js', () => ({
   cloneMirror: vi.fn(),
   updateAndPruneMirror: vi.fn(),
   repackRepository: vi.fn(),
   resolveRef: vi.fn(),
+}));
+
+vi.mock('../../lib/tarball-builder.js', () => ({
+  createTarballBuilder: vi.fn(() => ({
+    buildTarball: vi.fn(),
+  })),
 }));
 
 vi.mock('node:fs', () => ({
@@ -35,7 +42,7 @@ describe('Add command', () => {
     const repo = 'https://github.com/user/repo.git';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo]);
+    const result = await add.exec([repo]);
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(result).toBe(expectedTarget);
@@ -60,7 +67,7 @@ describe('Add command', () => {
     const repo = 'https://github.com/user/repo.git';
     const expectedTarget = getTargetPath(repo);
 
-    add.exec([repo], { force: true });
+    await add.exec([repo], { force: true });
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockUpdateAndPruneMirror).toHaveBeenCalledWith(expectedTarget);
@@ -82,7 +89,7 @@ describe('Add command', () => {
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
 
-    add.exec([repo], { force: false });
+    await add.exec([repo], { force: false });
 
     expect(mockCloneMirror).toHaveBeenCalledTimes(1);
     expect(mockUpdateAndPruneMirror).not.toHaveBeenCalled();
@@ -104,7 +111,7 @@ describe('Add command', () => {
     const add = new Add();
     const repo = 'https://github.com/user/repo.git';
 
-    add.exec([repo]);
+    await add.exec([repo]);
 
     expect(mockCloneMirror).toHaveBeenCalledTimes(1);
     expect(mockUpdateAndPruneMirror).not.toHaveBeenCalled();
@@ -124,16 +131,18 @@ describe('Add command', () => {
     const repo = 'git@github.com:org/repo-with-dashes.git';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo]);
+    const result = await add.exec([repo]);
 
     expect(result).toBe(expectedTarget);
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
   });
 
-  it('should throw error when no repository URL provided', () => {
+  it('should throw error when no repository URL provided', async () => {
     const add = new Add();
 
-    expect(() => add.exec([])).toThrow('Repository URL is required');
+    await expect(async () => await add.exec([])).rejects.toThrow(
+      'Repository URL is required'
+    );
   });
 
   it('should resolve reference when ref option is provided', async () => {
@@ -156,7 +165,7 @@ describe('Add command', () => {
     const ref = 'v1.0.0';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo], { ref });
+    const result = await add.exec([repo], { ref });
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, ref);
@@ -187,7 +196,7 @@ describe('Add command', () => {
     const ref = 'nonexistent-branch';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo], { ref });
+    const result = await add.exec([repo], { ref });
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, ref);
@@ -225,7 +234,7 @@ describe('Add command', () => {
     const ref = 'main';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo], { force: true, ref });
+    const result = await add.exec([repo], { force: true, ref });
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, ref);
@@ -259,7 +268,7 @@ describe('Add command', () => {
     const ref = 'test-ref';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo], { ref });
+    const result = await add.exec([repo], { ref });
 
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, ref);
@@ -291,7 +300,7 @@ describe('Add command', () => {
     const repo = 'https://github.com/user/repo.git';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo], { force: true });
+    const result = await add.exec([repo], { force: true });
 
     expect(mockRmSync).toHaveBeenCalledWith(expectedTarget, {
       recursive: true,
@@ -319,12 +328,284 @@ describe('Add command', () => {
     const repo = 'https://github.com/user/repo.git';
     const expectedTarget = getTargetPath(repo);
 
-    const result = add.exec([repo]);
+    const result = await add.exec([repo]);
 
     // Should return path without cloning or updating since repo already exists
     expect(mockCloneMirror).not.toHaveBeenCalled();
     expect(mockUpdateAndPruneMirror).not.toHaveBeenCalled();
     expect(mockRepackRepository).not.toHaveBeenCalled();
     expect(result).toBe(expectedTarget);
+  });
+
+  it('should build tarball when build flag is used with ref', async () => {
+    const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { createTarballBuilder } = await import(
+      '../../lib/tarball-builder.js'
+    );
+    const { existsSync } = await import('node:fs');
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+    const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
+
+    const mockBuildTarball = vi.fn().mockResolvedValue({
+      gitUrl: 'https://github.com/user/repo.git',
+      commitSha: 'abc123',
+      tarballPath: '/home/testuser/.gitcache/tarballs/abc123/package.tgz',
+      integrity: 'sha256-test',
+      buildTime: new Date(),
+    });
+
+    mockCreateTarballBuilder.mockReturnValue({
+      buildTarball: mockBuildTarball,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const mockSha = 'abc123';
+    mockResolveRef.mockReturnValue(mockSha);
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const ref = 'v1.0.0';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = await add.exec([repo], { ref, build: true });
+
+    expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockResolveRef).toHaveBeenCalledWith(repo, ref);
+    expect(mockBuildTarball).toHaveBeenCalledWith(repo, mockSha, {
+      force: undefined,
+    });
+    expect(consoleSpy).toHaveBeenCalledWith(`Resolved ${ref} → ${mockSha}`);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      `✓ Tarball cached: /home/testuser/.gitcache/tarballs/abc123/package.tgz`
+    );
+    expect(result).toBe(expectedTarget);
+
+    consoleSpy.mockRestore();
+  });
+
+  it('should build tarball when build flag is used without ref (uses HEAD)', async () => {
+    const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { createTarballBuilder } = await import(
+      '../../lib/tarball-builder.js'
+    );
+    const { existsSync } = await import('node:fs');
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+    const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
+
+    const mockBuildTarball = vi.fn().mockResolvedValue({
+      gitUrl: 'https://github.com/user/repo.git',
+      commitSha: 'def456',
+      tarballPath: '/home/testuser/.gitcache/tarballs/def456/package.tgz',
+      integrity: 'sha256-test2',
+      buildTime: new Date(),
+    });
+
+    mockCreateTarballBuilder.mockReturnValue({
+      buildTarball: mockBuildTarball,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const mockSha = 'def456';
+    mockResolveRef.mockReturnValue(mockSha);
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = await add.exec([repo], { build: true });
+
+    expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockResolveRef).toHaveBeenCalledWith(repo, 'HEAD');
+    expect(mockBuildTarball).toHaveBeenCalledWith(repo, mockSha, {
+      force: undefined,
+    });
+    expect(consoleSpy).toHaveBeenCalledWith(
+      `Building tarball for HEAD → ${mockSha}`
+    );
+    expect(consoleSpy).toHaveBeenCalledWith(
+      `✓ Tarball cached: /home/testuser/.gitcache/tarballs/def456/package.tgz`
+    );
+    expect(result).toBe(expectedTarget);
+
+    consoleSpy.mockRestore();
+  });
+
+  it('should handle tarball build errors gracefully', async () => {
+    const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { createTarballBuilder } = await import(
+      '../../lib/tarball-builder.js'
+    );
+    const { existsSync } = await import('node:fs');
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+    const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
+
+    const mockBuildTarball = vi
+      .fn()
+      .mockRejectedValue(new Error('Build failed'));
+
+    mockCreateTarballBuilder.mockReturnValue({
+      buildTarball: mockBuildTarball,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const mockSha = 'abc123';
+    mockResolveRef.mockReturnValue(mockSha);
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const ref = 'v1.0.0';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = await add.exec([repo], { ref, build: true });
+
+    expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockBuildTarball).toHaveBeenCalledWith(repo, mockSha, {
+      force: undefined,
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Warning: Failed to build tarball: Build failed'
+    );
+    expect(result).toBe(expectedTarget);
+
+    consoleSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('should handle HEAD resolution failure when building without ref', async () => {
+    const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Mock resolveRef to fail for HEAD
+    mockResolveRef.mockImplementation((repo: string, ref: string) => {
+      if (ref === 'HEAD') {
+        throw new Error('Could not resolve HEAD');
+      }
+      return 'some-sha';
+    });
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = await add.exec([repo], { build: true });
+
+    expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockResolveRef).toHaveBeenCalledWith(repo, 'HEAD');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Warning: Could not resolve HEAD for tarball build: Could not resolve HEAD'
+    );
+    expect(result).toBe(expectedTarget);
+
+    warnSpy.mockRestore();
+  });
+
+  it('should handle HEAD resolution non-Error exception when building without ref', async () => {
+    const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { existsSync } = await import('node:fs');
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockResolveRef = vi.mocked(resolveRef);
+    const mockExistsSync = vi.mocked(existsSync);
+
+    // Mock existsSync to return false (no existing repo)
+    mockExistsSync.mockReturnValue(false);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Mock resolveRef to throw a non-Error exception for HEAD
+    mockResolveRef.mockImplementation((repo: string, ref: string) => {
+      if (ref === 'HEAD') {
+        throw 'String error instead of Error object';
+      }
+      return 'some-sha';
+    });
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = await add.exec([repo], { build: true });
+
+    expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockResolveRef).toHaveBeenCalledWith(repo, 'HEAD');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Warning: Could not resolve HEAD for tarball build: Unknown error'
+    );
+    expect(result).toBe(expectedTarget);
+
+    warnSpy.mockRestore();
+  });
+
+  it('should handle non-Error exception during tarball building', async () => {
+    const { cloneMirror, resolveRef } = await import('../../lib/utils/git.js');
+    const { createTarballBuilder } = await import(
+      '../../lib/tarball-builder.js'
+    );
+
+    const mockCloneMirror = vi.mocked(cloneMirror);
+    const mockResolveRef = vi.mocked(resolveRef);
+    const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
+
+    const mockBuildTarball = vi.fn().mockImplementation(() => {
+      throw 'string error'; // Non-Error object
+    });
+
+    mockCreateTarballBuilder.mockReturnValue({
+      buildTarball: mockBuildTarball,
+    } as unknown as TarballBuilder);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const mockSha = 'abc123';
+    mockResolveRef.mockReturnValue(mockSha);
+
+    const add = new Add();
+    const repo = 'https://github.com/user/repo.git';
+    const expectedTarget = getTargetPath(repo);
+
+    const result = await add.exec([repo], { ref: 'main', build: true });
+
+    expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
+    expect(mockResolveRef).toHaveBeenCalledWith(repo, 'main');
+    expect(mockBuildTarball).toHaveBeenCalledWith(repo, mockSha, {
+      force: undefined,
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Warning: Failed to build tarball: Unknown error'
+    );
+    expect(result).toBe(expectedTarget);
+
+    consoleSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });

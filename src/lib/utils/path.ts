@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { platform, arch } from 'node:os';
 
 /**
  * Get the cache directory path
@@ -10,6 +11,13 @@ export function getCacheDir(): string {
     throw new Error('HOME environment variable is not set');
   }
   return join(homeDir, '.gitcache');
+}
+
+/**
+ * Get the current platform identifier (os-arch)
+ */
+export function getPlatformIdentifier(): string {
+  return `${platform()}-${arch()}`;
 }
 
 /**
@@ -64,4 +72,28 @@ export function getRepoPath(repoUrl: string): string {
  */
 export function getTargetPath(repoUrl: string): string {
   return join(getCacheDir(), getRepoPath(repoUrl));
+}
+
+/**
+ * Get the tarball cache path for a specific commit SHA and platform
+ * Follows the gameplan format: ~/.gitcache/tarballs/{sha}-{os}-{arch}.tgz
+ * Uses directories for metadata: ~/.gitcache/tarballs/{sha}-{os}-{arch}/
+ */
+export function getTarballCachePath(
+  commitSha: string,
+  platformId?: string
+): string {
+  const platform = platformId || getPlatformIdentifier();
+  return join(getCacheDir(), 'tarballs', `${commitSha}-${platform}`);
+}
+
+/**
+ * Get the tarball file path for a specific commit SHA and platform
+ */
+export function getTarballFilePath(
+  commitSha: string,
+  platformId?: string
+): string {
+  const platform = platformId || getPlatformIdentifier();
+  return join(getCacheDir(), 'tarballs', `${commitSha}-${platform}.tgz`);
 }
