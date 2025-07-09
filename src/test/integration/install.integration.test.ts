@@ -38,7 +38,7 @@ describe('GitCache Install Command Integration', () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it('should execute npm install with gitcache environment', () => {
+  it('should execute npm install with gitcache environment', async () => {
     const cliPath = path.resolve(__dirname, '../../index.ts');
 
     // Run the install command with --version to avoid actual package installation
@@ -51,7 +51,7 @@ describe('GitCache Install Command Integration', () => {
     expect(result.trim()).toMatch(/^\d+\.\d+\.\d+/);
   });
 
-  it('should pass through npm arguments correctly', () => {
+  it('should pass through npm arguments correctly', async () => {
     const cliPath = path.resolve(__dirname, '../../index.ts');
 
     // Test that help is passed through to npm

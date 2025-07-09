@@ -13,11 +13,11 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
     const ctx = useIntegrationTestSetup();
 
     describe('End-to-End Workflows', () => {
-      it('should complete full repository caching workflow', () => {
+      it('should complete full repository caching workflow', async () => {
         const testRepo = ctx.testRepos.simple;
 
         // Add repository
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
 
         // Verify caching worked
         expect(existsSync(repoPath)).toBe(true);
@@ -30,13 +30,15 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(result.trim()).toContain('Initial');
       });
 
-      it('should handle multiple repositories in same session', () => {
+      it('should handle multiple repositories in same session', async () => {
         // Add all test repositories
-        const results = Object.entries(ctx.testRepos).map(([name, repo]) => ({
-          name,
-          repo,
-          path: addRepository(repo.url),
-        }));
+        const results = await Promise.all(
+          Object.entries(ctx.testRepos).map(async ([name, repo]) => ({
+            name,
+            repo,
+            path: await addRepository(repo.url),
+          }))
+        );
 
         // Verify all were cached
         results.forEach(({ path }) => {
@@ -48,10 +50,10 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(existsSync(ctx.gitcacheDir)).toBe(true);
       });
 
-      it('should maintain isolation between test runs', () => {
+      it('should maintain isolation between test runs', async () => {
         // This test verifies that our test setup properly isolates each test
         const testRepo = ctx.testRepos.test;
-        const repoPath = addRepository(testRepo.url);
+        const repoPath = await addRepository(testRepo.url);
 
         expect(existsSync(repoPath)).toBe(true);
         expect(ctx.testDir).toMatch(/gitcache-integration-test-/);

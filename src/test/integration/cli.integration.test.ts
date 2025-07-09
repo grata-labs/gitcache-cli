@@ -11,7 +11,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
     const cliPath = join(__dirname, '../../index.ts');
 
     describe('Command Line Interface', () => {
-      it('should support add command with repository', () => {
+      it('should support add command with repository', async () => {
         const testRepo = ctx.testRepos.simple;
 
         const result = execSync(`npx tsx ${cliPath} add ${testRepo.url}`, {
@@ -27,7 +27,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(existsSync(join(expectedPath, 'HEAD'))).toBe(true);
       });
 
-      it('should support cache alias for add command', () => {
+      it('should support cache alias for add command', async () => {
         const testRepo = ctx.testRepos.simple;
 
         const result = execSync(`npx tsx ${cliPath} cache ${testRepo.url}`, {
@@ -41,7 +41,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(existsSync(expectedPath)).toBe(true);
       });
 
-      it('should support --force flag integration', () => {
+      it('should support --force flag integration', async () => {
         const testRepo = ctx.testRepos.simple;
 
         // First add
@@ -66,7 +66,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(existsSync(repoPath)).toBe(true);
       });
 
-      it('should support --ref flag with test repository', () => {
+      it('should support --ref flag with test repository', async () => {
         const testRepo = ctx.testRepos.complex;
 
         try {
@@ -97,7 +97,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         }
       });
 
-      it('should handle invalid reference gracefully', () => {
+      it('should handle invalid reference gracefully', async () => {
         const testRepo = ctx.testRepos.simple;
 
         const result = execSync(
@@ -129,7 +129,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         }
       });
 
-      it('should support install command aliases', () => {
+      it('should support install command aliases', async () => {
         // Test both 'install' and 'i' aliases
         const installResult = execSync(`npx tsx ${cliPath} install --version`, {
           encoding: 'utf8',
@@ -147,7 +147,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(installResult).toBe(iResult);
       });
 
-      it('should display help for commands', () => {
+      it('should display help for commands', async () => {
         const helpResult = execSync(`npx tsx ${cliPath} --help`, {
           encoding: 'utf8',
           stdio: 'pipe',
@@ -158,7 +158,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(helpResult).toContain('Mirror a repository');
       });
 
-      it('should handle command errors gracefully', () => {
+      it('should handle command errors gracefully', async () => {
         expect(() => {
           execSync(`npx tsx ${cliPath} add`, {
             encoding: 'utf8',

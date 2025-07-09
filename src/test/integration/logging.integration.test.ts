@@ -11,7 +11,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
     const cliPath = join(__dirname, '../../index.ts');
 
     describe('Activity Logging', () => {
-      it('should create activity log when resolving references', () => {
+      it('should create activity log when resolving references', async () => {
         const testRepo = ctx.testRepos.complex;
         const ref = 'main';
 
@@ -46,7 +46,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         );
       });
 
-      it('should handle multiple reference resolutions in same session', () => {
+      it('should handle multiple reference resolutions in same session', async () => {
         const testRepo = ctx.testRepos.complex;
 
         // Resolve main branch
@@ -89,7 +89,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(refs).toContain('feature/test');
       });
 
-      it('should persist log across multiple command invocations', () => {
+      it('should persist log across multiple command invocations', async () => {
         const repo1 = ctx.testRepos.complex;
         const repo2 = ctx.testRepos.simple;
 
@@ -122,7 +122,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(repos.has(repo2.url)).toBe(true);
       });
 
-      it('should not log when reference resolution fails', () => {
+      it('should not log when reference resolution fails', async () => {
         const repoUrl = ctx.testRepos.simple.url;
         const invalidRef = 'definitely-nonexistent-branch';
 

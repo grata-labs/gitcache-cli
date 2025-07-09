@@ -6,6 +6,9 @@ import {
   getRepoPath,
   getTargetPath,
   normalizeRepoUrl,
+  getPlatformIdentifier,
+  getTarballCachePath,
+  getTarballFilePath,
 } from '../../../lib/utils/path.js';
 
 const originalEnv = process.env;
@@ -148,6 +151,82 @@ describe('path utilities', () => {
         .digest('hex');
       const expected = join('/home/testuser', '.gitcache', expectedHash);
       expect(getTargetPath(repo)).toBe(expected);
+    });
+  });
+
+  describe('getPlatformIdentifier', () => {
+    it('should return os-arch format', () => {
+      const platform = getPlatformIdentifier();
+      expect(platform).toMatch(/^[a-z]+.*-[a-z0-9]+$/); // like darwin-arm64, linux-x64
+      expect(platform.includes('-')).toBe(true);
+    });
+  });
+
+  describe('getTarballCachePath', () => {
+    it('should generate cache directory path with platform', () => {
+      process.env.HOME = '/home/testuser';
+      const commitSha = 'abc123def456';
+      const platform = 'linux-x64';
+
+      const result = getTarballCachePath(commitSha, platform);
+      const expected = join(
+        '/home/testuser',
+        '.gitcache',
+        'tarballs',
+        `${commitSha}-${platform}`
+      );
+
+      expect(result).toBe(expected);
+    });
+
+    it('should use current platform when platform not specified', () => {
+      process.env.HOME = '/home/testuser';
+      const commitSha = 'abc123def456';
+
+      const result = getTarballCachePath(commitSha);
+      const currentPlatform = getPlatformIdentifier();
+      const expected = join(
+        '/home/testuser',
+        '.gitcache',
+        'tarballs',
+        `${commitSha}-${currentPlatform}`
+      );
+
+      expect(result).toBe(expected);
+    });
+  });
+
+  describe('getTarballFilePath', () => {
+    it('should generate tarball file path with platform', () => {
+      process.env.HOME = '/home/testuser';
+      const commitSha = 'abc123def456';
+      const platform = 'darwin-arm64';
+
+      const result = getTarballFilePath(commitSha, platform);
+      const expected = join(
+        '/home/testuser',
+        '.gitcache',
+        'tarballs',
+        `${commitSha}-${platform}.tgz`
+      );
+
+      expect(result).toBe(expected);
+    });
+
+    it('should use current platform when platform not specified', () => {
+      process.env.HOME = '/home/testuser';
+      const commitSha = 'abc123def456';
+
+      const result = getTarballFilePath(commitSha);
+      const currentPlatform = getPlatformIdentifier();
+      const expected = join(
+        '/home/testuser',
+        '.gitcache',
+        'tarballs',
+        `${commitSha}-${currentPlatform}.tgz`
+      );
+
+      expect(result).toBe(expected);
     });
   });
 });
