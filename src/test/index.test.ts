@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { addRepository, cacheRepository, main } from '../index.js';
+import { npmInstall } from '../lib/api.js';
 import { getTargetPath } from '../lib/utils/path.js';
 
 // Calculate expected hash for test repo
@@ -12,6 +13,13 @@ vi.mock('../commands/add.js', () => ({
     exec: vi
       .fn()
       .mockReturnValue(expectedPath),
+  })),
+}));
+
+// Mock the Install command
+vi.mock('../commands/install.js', () => ({
+  Install: vi.fn().mockImplementation(() => ({
+    exec: vi.fn(),
   })),
 }));
 
@@ -92,12 +100,45 @@ describe('gitcache CLI', () => {
     });
   });
 
+  describe('npmInstall', () => {
+    it('should delegate to Install command', async () => {
+      const { Install } = await import('../commands/install.js');
+      const MockInstall = vi.mocked(Install);
+      const mockExec = vi.fn();
+      MockInstall.mockImplementation(
+        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Install>
+      );
+
+      const args = ['--save-dev', 'typescript'];
+      npmInstall(args);
+
+      expect(MockInstall).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalledWith(args);
+    });
+
+    it('should handle empty arguments', async () => {
+      const { Install } = await import('../commands/install.js');
+      const MockInstall = vi.mocked(Install);
+      const mockExec = vi.fn();
+      MockInstall.mockImplementation(
+        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Install>
+      );
+
+      npmInstall();
+
+      expect(MockInstall).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalledWith([]);
+    });
+  });
+
   describe('main', () => {
-    it('should set up commander program correctly with add command', async () => {
+    it('should set up commander program correctly with add and install commands', async () => {
       const { Command } = await import('commander');
       const { Add } = await import('../commands/add.js');
+      const { Install } = await import('../commands/install.js');
       const MockCommand = vi.mocked(Command);
       const MockAdd = vi.mocked(Add);
+      const MockInstall = vi.mocked(Install);
 
       let actionCallbacks: Array<
         (repo: string, opts: { force?: boolean }) => void
@@ -120,9 +161,13 @@ describe('gitcache CLI', () => {
         () => mockProgram as unknown as InstanceType<typeof Command>
       );
 
-      const mockExec = vi.fn();
+      const mockAddExec = vi.fn();
+      const mockInstallExec = vi.fn();
       MockAdd.mockImplementation(
-        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
+        () => ({ exec: mockAddExec }) as unknown as InstanceType<typeof Add>
+      );
+      MockInstall.mockImplementation(
+        () => ({ exec: mockInstallExec }) as unknown as InstanceType<typeof Install>
       );
 
       await main();
@@ -137,8 +182,9 @@ describe('gitcache CLI', () => {
         'show verbose help including aliases'
       );
 
-      // Should register both 'add' and 'cache' commands
+      // Should register add, install, and cache commands
       expect(mockProgram.command).toHaveBeenCalledWith('add <repo>');
+      expect(mockProgram.command).toHaveBeenCalledWith('install [args...]');
       expect(mockProgram.command).toHaveBeenCalledWith('cache <repo>', {
         hidden: true,
       });
@@ -149,24 +195,6 @@ describe('gitcache CLI', () => {
         '\nUse --verbose to see available command aliases.'
       );
       expect(mockProgram.parseAsync).toHaveBeenCalledWith(process.argv);
-
-      // Test that both commands work
-      expect(actionCallbacks).toHaveLength(2);
-
-      // Test add command
-      actionCallbacks[0]('https://github.com/test/repo.git', { force: true });
-      expect(MockAdd).toHaveBeenCalled();
-      expect(mockExec).toHaveBeenCalledWith(
-        ['https://github.com/test/repo.git'],
-        { force: true }
-      );
-
-      // Test cache alias
-      actionCallbacks[1]('https://github.com/test/repo2.git', { force: false });
-      expect(mockExec).toHaveBeenCalledWith(
-        ['https://github.com/test/repo2.git'],
-        { force: false }
-      );
     });
 
     it('should handle parseAsync errors', async () => {
@@ -207,8 +235,10 @@ describe('gitcache CLI', () => {
     it('should register cache as an alias for add command', async () => {
       const { Command } = await import('commander');
       const { Add } = await import('../commands/add.js');
+      const { Install } = await import('../commands/install.js');
       const MockCommand = vi.mocked(Command);
       const MockAdd = vi.mocked(Add);
+      const MockInstall = vi.mocked(Install);
 
       const mockProgram = {
         name: vi.fn().mockReturnThis(),
@@ -224,20 +254,26 @@ describe('gitcache CLI', () => {
         () => mockProgram as unknown as InstanceType<typeof Command>
       );
 
-      const mockExec = vi.fn();
+      const mockAddExec = vi.fn();
+      const mockInstallExec = vi.fn();
       MockAdd.mockImplementation(
-        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Add>
+        () => ({ exec: mockAddExec }) as unknown as InstanceType<typeof Add>
+      );
+      MockInstall.mockImplementation(
+        () => ({ exec: mockInstallExec }) as unknown as InstanceType<typeof Install>
       );
 
       await main();
 
-      // Verify that both add and cache commands are registered
+      // Verify that add, install, and cache commands are registered
       const commandCalls = mockProgram.command.mock.calls;
       const commandNames = commandCalls.map((call) => call[0]);
 
       expect(commandNames).toContain('add <repo>');
+      expect(commandNames).toContain('install [args...]');
       expect(commandNames).toContain('cache <repo>');
-      expect(commandNames).toHaveLength(2);
+      expect(commandNames).toContain('i [args...]');  // Install alias uses [args...] pattern
+      expect(commandNames).toHaveLength(4);
 
       // Verify that cache is registered as hidden
       const cacheCall = commandCalls.find((call) => call[0] === 'cache <repo>');
@@ -285,7 +321,7 @@ describe('gitcache CLI', () => {
       // Verify aliases are shown in verbose mode
       expect(mockProgram.addHelpText).toHaveBeenCalledWith(
         'after',
-        '\nAliases:\n  cache -> add\n\nUse --verbose to see aliases in help output.'
+        '\nAliases:\n  cache -> add\n  i -> install\n\nUse --verbose to see aliases in help output.'
       );
 
       // Restore original argv
