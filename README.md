@@ -3,8 +3,9 @@
 > Universal Git-dependency cache & proxy — _CLI client_
 
 ![CI](https://github.com/grata-labs/gitcache-cli/actions/workflows/ci.yml/badge.svg)
-![Integration: macOS](https://img.shields.io/github/actions/workflow/status/grata-labs/gitcache-cli/weekly-integration.yml?job=integration-macos-status&label=Integration%3A%20macOS)
-![Integration: Windows](https://img.shields.io/github/actions/workflow/status/grata-labs/gitcache-cli/weekly-integration.yml?job=integration-windows-status&label=Integration%3A%20Windows)
+[![Integration: macOS](https://github.com/grata-labs/gitcache-cli/actions/workflows/weekly-integration-macos.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/weekly-integration-macos.yml)
+[![Integration: Windows](https://github.com/grata-labs/gitcache-cli/actions/workflows/weekly-integration-windows.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/weekly-integration-windows.yml)
+[![Integration: Ubuntu](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml)
 [![npm version](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli.svg)](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli)
 
 A TypeScript CLI for caching Git repositories locally and (coming soon) syncing with team-shared GitCache proxies.

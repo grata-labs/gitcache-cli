@@ -1,0 +1,29 @@
+name: Weekly Integration - Windows
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  integration-windows:
+    name: 'Integration: Windows + Node 22'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run integration tests
+        run: npm run test:integration
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-windows-node22
+          path: |
+            coverage/
+            test-results.xml
+        if: always()

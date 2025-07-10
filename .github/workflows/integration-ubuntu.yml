@@ -1,0 +1,26 @@
+name: Integration Tests - Ubuntu
+
+on:
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  integration-ubuntu:
+    name: 'Integration: Ubuntu + Node 22'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run integration tests
+        run: npm run test:integration
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-ubuntu-node22
+          path: |
+            coverage/
+            test-results.xml
+        if: always()
