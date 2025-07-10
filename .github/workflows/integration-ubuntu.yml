@@ -1,4 +1,4 @@
-name: Integration Tests - Ubuntu
+name: Integration - Ubuntu
 
 on:
   workflow_dispatch: # Manual trigger only
