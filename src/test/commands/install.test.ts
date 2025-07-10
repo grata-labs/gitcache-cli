@@ -181,4 +181,85 @@ describe('Install command', () => {
       cwd: process.cwd(),
     });
   });
+
+  it('should handle Windows case where status is null (successful)', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
+
+    // Mock Windows behavior: status is null but no error (success)
+    mockSpawnSync.mockReturnValue({
+      status: null,
+      error: undefined,
+      pid: 0,
+      output: [],
+      stdout: Buffer.from(''),
+      stderr: Buffer.from(''),
+      signal: null,
+    } as SpawnSyncReturns<Buffer>);
+
+    const install = new Install();
+
+    // Should not call process.exit when status is null but no error
+    expect(() => install.exec()).not.toThrow();
+    expect(mockSpawnSync).toHaveBeenCalledWith('npm', ['install'], {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        npm_config_cache: getExpectedCachePath(),
+        NPM_CONFIG_CACHE: getExpectedCachePath(),
+      },
+      cwd: process.cwd(),
+    });
+  });
+
+  it('should handle Windows case where status is null but there is an error', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
+
+    // Mock process.exit to capture the exit code
+    const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit called'); // Prevent actual exit
+    });
+
+    // Mock Windows behavior: status is null but there's an error
+    mockSpawnSync.mockReturnValue({
+      status: null,
+      error: new Error('Command failed'),
+      pid: 0,
+      output: [],
+      stdout: Buffer.from(''),
+      stderr: Buffer.from(''),
+      signal: null,
+    } as SpawnSyncReturns<Buffer>);
+
+    const install = new Install();
+
+    // Should call process.exit(1) when status is null but there's an error
+    expect(() => install.exec()).toThrow('process.exit called');
+    expect(mockExit).toHaveBeenCalledWith(1);
+
+    // Restore the original process.exit
+    mockExit.mockRestore();
+  });
+
+  it('should handle Windows case where status is undefined (successful)', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
+
+    // Mock Windows behavior: status is undefined but no error (success)
+    mockSpawnSync.mockReturnValue({
+      status: undefined,
+      error: undefined,
+      pid: 0,
+      output: [],
+      stdout: Buffer.from(''),
+      stderr: Buffer.from(''),
+      signal: null,
+    } as any as SpawnSyncReturns<Buffer>);
+
+    const install = new Install();
+
+    // Should not call process.exit when status is undefined but no error
+    expect(() => install.exec()).not.toThrow();
+  });
 });
