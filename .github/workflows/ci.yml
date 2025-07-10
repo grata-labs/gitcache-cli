@@ -298,6 +298,13 @@ jobs:
               echo "❌ Docs check failed"
               exit 1
             fi
+          # Check if this is a tooling-only change
+          elif [[ "${{ needs.changes.outputs.tooling-only }}" == "true" && "${{ needs.changes.outputs.has-code }}" == "false" ]]; then
+            echo "✅ Tooling-only change - tooling-check must pass"
+            if [[ "${{ needs.tooling-check.result }}" != "success" ]]; then
+              echo "❌ Tooling check failed"
+              exit 1
+            fi
           # Check if this is a tests-only change
           elif [[ "${{ needs.changes.outputs.tests-only }}" == "true" && "${{ needs.changes.outputs.has-non-test-code }}" != "true" ]]; then
             echo "✅ Tests-only change - tests-check must pass"
