@@ -1,4 +1,4 @@
-name: Weekly Integration - Windows
+name: Integration - Windows
 
 on:
   schedule:
