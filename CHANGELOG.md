@@ -1,3 +1,22 @@
+# [1.1.0](https://github.com/grata-labs/gitcache-cli/compare/v1.0.0...v1.1.0) (2025-07-10)
+
+
+### Bug Fixes
+
+* adds integration tests, fixes exists/force issue ([07dd1cc](https://github.com/grata-labs/gitcache-cli/commit/07dd1cc9a54a64d4fe82d2e9807d344a47cd3863))
+* fix bug of idempotency for add ([01d2fde](https://github.com/grata-labs/gitcache-cli/commit/01d2fde843c11d0b2b3af7baa4e3ad2d7597c6b6))
+
+
+### Features
+
+* Adds alias system and renames 'cache' to 'add' ([e829e87](https://github.com/grata-labs/gitcache-cli/commit/e829e8707ec60ae51a1a78a3ce37ae205bc6af4c))
+* adds update and prune to add --force ([51163e8](https://github.com/grata-labs/gitcache-cli/commit/51163e845141c012efce4e90c7ef20b46633a9d5))
+* create's the install command ([aa5f7cc](https://github.com/grata-labs/gitcache-cli/commit/aa5f7ccd950cb96a159cc3f7fe9eb22f3e8f024c))
+* implement logging sha ([0f1abb4](https://github.com/grata-labs/gitcache-cli/commit/0f1abb4aad39bd246e56fc2ae087940de74c71d9))
+* Implements Tarball Build & Cache ([09cb1bf](https://github.com/grata-labs/gitcache-cli/commit/09cb1bfdfa797b2663998d8daa1581a47b8b7945))
+* paths are normalized, protocol chosen is respected ([0be3b73](https://github.com/grata-labs/gitcache-cli/commit/0be3b733c4e04dd4d1ff07bfd6240d5388c13f82))
+* replace url encoding with sha-256 ([b7e407d](https://github.com/grata-labs/gitcache-cli/commit/b7e407d702ffd6aa1a68dddf3025651e1eac1d4d))
+
 # 1.0.0 (2025-07-08)
 
 
