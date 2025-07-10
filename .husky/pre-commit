@@ -1,3 +1,9 @@
+# Skip all hooks in CI environment
+if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
+  echo "⏭️  Skipping pre-commit hooks in CI environment"
+  exit 0
+fi
+
 # Check if we're on main branch and if this is the upstream repo
 branch=$(git rev-parse --abbrev-ref HEAD)
 remote_url=$(git config --get remote.origin.url 2>/dev/null || echo "")
