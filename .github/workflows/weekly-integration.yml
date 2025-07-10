@@ -1,0 +1,99 @@
+name: Weekly Integration Tests
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  integration-macos:
+    name: 'Integration: macOS + Node 22'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run integration tests
+        run: npm run test:integration
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-macos-node22
+          path: |
+            coverage/
+            test-results.xml
+        if: always()
+
+  integration-windows:
+    name: 'Integration: Windows + Node 22'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run integration tests
+        run: npm run test:integration
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-windows-node22
+          path: |
+            coverage/
+            test-results.xml
+        if: always()
+
+  # Summary jobs for individual OS badges
+  integration-macos-status:
+    name: 'macOS Integration Status'
+    runs-on: ubuntu-latest
+    needs: integration-macos
+    if: always()
+    steps:
+      - name: Set macOS badge status
+        run: |
+          if [[ "${{ needs.integration-macos.result }}" == "success" ]]; then
+            echo "✅ macOS integration tests passed"
+          else
+            echo "❌ macOS integration tests failed"
+            exit 1
+          fi
+
+  integration-windows-status:
+    name: 'Windows Integration Status'
+    runs-on: ubuntu-latest
+    needs: integration-windows
+    if: always()
+    steps:
+      - name: Set Windows badge status
+        run: |
+          if [[ "${{ needs.integration-windows.result }}" == "success" ]]; then
+            echo "✅ Windows integration tests passed"
+          else
+            echo "❌ Windows integration tests failed"
+            exit 1
+          fi
+
+  # Overall summary (optional - for combined status)
+  integration-summary:
+    name: 'Integration Summary'
+    runs-on: ubuntu-latest
+    needs: [integration-macos, integration-windows]
+    if: always()
+    steps:
+      - name: Check all integration results
+        run: |
+          if [[ "${{ needs.integration-macos.result }}" == "success" && "${{ needs.integration-windows.result }}" == "success" ]]; then
+            echo "✅ All integration tests passed (macOS + Windows)"
+          else
+            echo "❌ Some integration tests failed"
+            echo "macOS: ${{ needs.integration-macos.result }}"
+            echo "Windows: ${{ needs.integration-windows.result }}"
+            exit 1
+          fi
