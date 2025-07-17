@@ -111,7 +111,7 @@ export class Prepare extends BaseCommand {
       }
     } catch (error) {
       throw new Error(
-        `Failed to prepare cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to prepare cache: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -155,8 +155,7 @@ export class Prepare extends BaseCommand {
 
         results.push({ name: dep.name, success: true });
       } catch (error) {
-        const errorMsg =
-          error instanceof Error ? error.message : 'Unknown error';
+        const errorMsg = error instanceof Error ? error.message : String(error);
 
         if (opts.verbose) {
           console.log(`  ✗ Failed: ${errorMsg}`);
@@ -195,9 +194,10 @@ export class Prepare extends BaseCommand {
     }
 
     // Try common lockfile names in order of preference
+    // npm-shrinkwrap.json has higher priority than package-lock.json
     const commonLockfiles = [
-      'package-lock.json',
       'npm-shrinkwrap.json',
+      'package-lock.json',
       'yarn.lock',
     ];
 

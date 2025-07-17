@@ -69,7 +69,7 @@ export class Scan extends BaseCommand {
       }
     } catch (error) {
       throw new Error(
-        `Failed to scan lockfile: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to scan lockfile: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -80,9 +80,10 @@ export class Scan extends BaseCommand {
     }
 
     // Try common lockfile names in order of preference
+    // npm-shrinkwrap.json has higher priority than package-lock.json
     const commonLockfiles = [
-      'package-lock.json',
       'npm-shrinkwrap.json',
+      'package-lock.json',
       'yarn.lock',
     ];
 
@@ -153,8 +154,8 @@ export class Scan extends BaseCommand {
         dep.packageJsonUrl !== dep.lockfileUrl
       ) {
         if (
-          dep.lockfileUrl.includes('ssh://') &&
-          dep.packageJsonUrl.includes('https://')
+          dep.packageJsonUrl.includes('ssh://') &&
+          dep.lockfileUrl.includes('https://')
         ) {
           console.log(
             `    ⚠ npm v7+ bug detected: SSH→HTTPS conversion applied`
