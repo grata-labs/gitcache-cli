@@ -349,7 +349,7 @@ describe('lockfile scanner', () => {
       writeFileSync(lockfilePath, '{"test": "data"}');
 
       expect(() => scanLockfile(lockfilePath)).toThrow(
-        'Failed to parse lockfile: Invalid JSON'
+        'Failed to parse lockfile: Non-Error string exception'
       );
 
       jsonParseSpy.mockRestore();
@@ -391,7 +391,7 @@ describe('lockfile scanner', () => {
 
       expect(result.dependencies).toHaveLength(1);
       expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to parse package.json: Unknown error'
+        'Failed to parse package.json: Non-Error package.json exception'
       );
 
       consoleSpy.mockRestore();
@@ -904,7 +904,7 @@ describe('lockfile scanner', () => {
       expect(resolved).toHaveLength(1);
       expect(resolved[0].resolvedSha).toBeUndefined();
       expect(consoleSpy).toHaveBeenCalledWith(
-        "Failed to resolve test-pkg@main: Failed to resolve ref 'main' for https://github.com/user/repo.git: Unknown error"
+        "Failed to resolve test-pkg@main: Error: Failed to resolve ref 'main' for https://github.com/user/repo.git: Non-Error git exception"
       );
 
       consoleSpy.mockRestore();
@@ -935,7 +935,7 @@ describe('lockfile scanner', () => {
       expect(resolved).toHaveLength(1);
       expect(resolved[0].resolvedSha).toBeUndefined();
       expect(consoleSpy).toHaveBeenCalledWith(
-        "Failed to resolve test-pkg@main: Failed to resolve ref 'main' for https://github.com/user/repo.git: Unknown error"
+        "Failed to resolve test-pkg@main: Error: Failed to resolve ref 'main' for https://github.com/user/repo.git: [object Object]"
       );
 
       consoleSpy.mockRestore();
@@ -971,7 +971,7 @@ describe('lockfile scanner', () => {
       expect(resolved).toHaveLength(1);
       expect(resolved[0].resolvedSha).toBeUndefined();
       expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to resolve test-pkg@main: Unknown error'
+        'Failed to resolve test-pkg@main: Non-Error string exception'
       );
 
       consoleSpy.mockRestore();
@@ -1002,7 +1002,7 @@ describe('lockfile scanner', () => {
       expect(resolved).toHaveLength(1);
       expect(resolved[0].resolvedSha).toBeUndefined();
       expect(consoleSpy).toHaveBeenCalledWith(
-        "Failed to resolve test-pkg@main: Failed to resolve ref 'main' for https://github.com/user/repo.git: Unknown error"
+        "Failed to resolve test-pkg@main: Error: Failed to resolve ref 'main' for https://github.com/user/repo.git: String exception from git command"
       );
 
       consoleSpy.mockRestore();

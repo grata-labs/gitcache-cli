@@ -170,9 +170,7 @@ export class Install extends BaseCommand {
             });
             return { name: dep.name, success: true };
           } catch (error) {
-            console.warn(
-              `⚠️  Failed to build ${dep.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
+            console.warn(`⚠️  Failed to build ${dep.name}: ${String(error)}`);
             return { name: dep.name, success: false };
           }
         })
@@ -193,9 +191,7 @@ export class Install extends BaseCommand {
       }
     } catch (error) {
       // Don't fail the install if preparation fails
-      console.warn(
-        `⚠️  Cache preparation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      console.warn(`⚠️  Cache preparation failed: ${String(error)}`);
       console.log('⏭️  Continuing with normal install...\n');
     }
   }

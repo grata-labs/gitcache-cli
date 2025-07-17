@@ -2,6 +2,7 @@ import { Add } from '../commands/add.js';
 import { Install } from '../commands/install.js';
 import { Scan } from '../commands/scan.js';
 import { Prepare } from '../commands/prepare.js';
+import { Analyze } from '../commands/analyze.js';
 import type { CommandConfig } from './types.js';
 
 /**
@@ -25,5 +26,9 @@ export const commands: Record<string, CommandConfig> = {
   prepare: {
     command: Prepare,
     description: Prepare.description,
+  },
+  analyze: {
+    command: Analyze,
+    description: Analyze.description,
   },
 };

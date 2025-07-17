@@ -139,7 +139,7 @@ describe('git utilities', () => {
       const ref = 'main';
 
       expect(() => resolveRef(repo, ref)).toThrow(
-        `Failed to resolve ref 'main' for ${repo}: git command failed`
+        `Failed to resolve ref 'main' for ${repo}: Error: git command failed`
       );
     });
 
@@ -155,7 +155,7 @@ describe('git utilities', () => {
       const ref = 'main';
 
       expect(() => resolveRef(repo, ref)).toThrow(
-        `Failed to resolve ref 'main' for ${repo}: Unknown error`
+        `Failed to resolve ref 'main' for ${repo}: string error`
       );
     });
   });

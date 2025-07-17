@@ -30,8 +30,8 @@ function registerCommand(
         result instanceof Promise ? await result : result;
       });
     /* c8 ignore end */
-  } else if (name === 'scan' || name === 'prepare') {
-    // Handle scan and prepare commands (no repo argument required)
+  } else if (name === 'scan' || name === 'prepare' || name === 'analyze') {
+    // Handle scan, prepare, and analyze commands (no repo argument required)
     const cmd = program.command(name).description(config.description);
 
     // Add options based on the command's static params

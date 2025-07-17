@@ -201,7 +201,7 @@ describe('Add command', () => {
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, ref);
     expect(consoleSpy).toHaveBeenCalledWith(
-      `Warning: Failed to resolve ref 'nonexistent-branch': Reference not found`
+      `Warning: Failed to resolve ref 'nonexistent-branch': Error: Reference not found`
     );
     expect(result).toBe(expectedTarget);
 
@@ -273,7 +273,7 @@ describe('Add command', () => {
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, ref);
     expect(warnSpy).toHaveBeenCalledWith(
-      "Warning: Failed to resolve ref 'test-ref': Unknown error"
+      "Warning: Failed to resolve ref 'test-ref': string error"
     );
     expect(result).toBe(expectedTarget);
 
@@ -485,7 +485,7 @@ describe('Add command', () => {
       force: undefined,
     });
     expect(warnSpy).toHaveBeenCalledWith(
-      'Warning: Failed to build tarball: Build failed'
+      'Warning: Failed to build tarball: Error: Build failed'
     );
     expect(result).toBe(expectedTarget);
 
@@ -522,7 +522,7 @@ describe('Add command', () => {
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, 'HEAD');
     expect(warnSpy).toHaveBeenCalledWith(
-      'Warning: Could not resolve HEAD for tarball build: Could not resolve HEAD'
+      'Warning: Could not resolve HEAD for tarball build: Error: Could not resolve HEAD'
     );
     expect(result).toBe(expectedTarget);
 
@@ -558,7 +558,7 @@ describe('Add command', () => {
     expect(mockCloneMirror).toHaveBeenCalledWith(repo, expectedTarget);
     expect(mockResolveRef).toHaveBeenCalledWith(repo, 'HEAD');
     expect(warnSpy).toHaveBeenCalledWith(
-      'Warning: Could not resolve HEAD for tarball build: Unknown error'
+      'Warning: Could not resolve HEAD for tarball build: String error instead of Error object'
     );
     expect(result).toBe(expectedTarget);
 
@@ -601,7 +601,7 @@ describe('Add command', () => {
       force: undefined,
     });
     expect(warnSpy).toHaveBeenCalledWith(
-      'Warning: Failed to build tarball: Unknown error'
+      'Warning: Failed to build tarball: string error'
     );
     expect(result).toBe(expectedTarget);
 

@@ -251,7 +251,9 @@ describe('TarballBuilder', () => {
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
-      ).rejects.toThrow('Failed to checkout commit abc123: Git clone failed');
+      ).rejects.toThrow(
+        'Failed to checkout commit abc123: Error: Git clone failed'
+      );
     });
 
     it('should handle npm install failures', async () => {
@@ -515,7 +517,9 @@ describe('TarballBuilder', () => {
 
     await expect(
       builder.buildTarball(gitUrl, commitSha, { force: true })
-    ).rejects.toThrow('Failed to calculate integrity: shasum command failed');
+    ).rejects.toThrow(
+      'Failed to calculate integrity: Error: shasum command failed'
+    );
   });
 
   it('should handle package without package.json', async () => {
@@ -668,7 +672,7 @@ describe('TarballBuilder', () => {
     await expect(
       builder.buildTarball(gitUrl, commitSha, { force: true })
     ).rejects.toThrow(
-      'Failed to calculate integrity: shasum calculation failed'
+      'Failed to calculate integrity: Error: shasum calculation failed'
     );
   });
 
@@ -736,7 +740,7 @@ describe('TarballBuilder', () => {
     await expect(
       builder.buildTarball(gitUrl, commitSha, { force: true })
     ).rejects.toThrow(
-      'Failed to checkout commit abc123: failed to checkout commit'
+      'Failed to checkout commit abc123: Error: failed to checkout commit'
     );
   });
 
@@ -1073,7 +1077,9 @@ describe('TarballBuilder', () => {
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
-      ).rejects.toThrow('Both npm ci and npm install failed: Unknown error');
+      ).rejects.toThrow(
+        'Failed to build package: Error: Both npm ci and npm install failed: 42'
+      );
     });
 
     it('should handle non-Error exceptions in buildPackage', async () => {
@@ -1116,7 +1122,7 @@ describe('TarballBuilder', () => {
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
-      ).rejects.toThrow('Failed to build package: Unknown error');
+      ).rejects.toThrow('Failed to build package: null');
     });
 
     it('should handle non-Error exceptions in calculateIntegrity', async () => {
@@ -1171,7 +1177,7 @@ describe('TarballBuilder', () => {
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
-      ).rejects.toThrow('Failed to calculate integrity: Unknown error');
+      ).rejects.toThrow('Failed to calculate integrity: array,error');
     });
 
     it('should handle empty npm pack output', async () => {

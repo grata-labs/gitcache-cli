@@ -77,9 +77,7 @@ export function logRefResolution(
     writeFileSync(logPath, logLine, { flag: 'a' });
   } catch (error) {
     // Log errors are non-fatal - don't break the main operation
-    console.warn(
-      `Warning: Failed to write to log: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
+    console.warn(`Warning: Failed to write to log: ${String(error)}`);
   }
 }
 
