@@ -22,9 +22,12 @@ function registerCommand(
       .command(`${name} [args...]`)
       .description(config.description)
       /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-      .action((args: string[] = []) => {
+      .action(async (args: string[] = []) => {
         const instance = new config.command();
-        instance.exec(args);
+        const result = instance.exec(args);
+
+        // Handle both sync and async commands
+        result instanceof Promise ? await result : result;
       });
     /* c8 ignore end */
   } else if (name === 'scan' || name === 'prepare') {
@@ -118,9 +121,12 @@ function registerAliases(
             .command(`${alias} [args...]`, { hidden: true })
             .description(`Alias for '${mainCommand}' command`)
             /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-            .action((args: string[] = []) => {
+            .action(async (args: string[] = []) => {
               const instance = new config.command();
-              instance.exec(args);
+              const result = instance.exec(args);
+
+              // Handle both sync and async commands
+              result instanceof Promise ? await result : result;
             })
             /* c8 ignore end */
             .addHelpText(

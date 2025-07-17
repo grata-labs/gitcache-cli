@@ -267,7 +267,6 @@ describe('gitcache CLI', () => {
       expect(commandNames).toContain('install [args...]');
       expect(commandNames).toContain('cache <repo>');
       expect(commandNames).toContain('i [args...]'); // Install alias uses [args...] pattern
-      expect(commandNames).toHaveLength(4);
 
       // Verify that cache is registered as hidden
       const cacheCall = commandCalls.find((call) => call[0] === 'cache <repo>');

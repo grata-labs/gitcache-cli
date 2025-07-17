@@ -79,7 +79,7 @@ describe('GitCache Install Command Integration', () => {
 
     try {
       // Run the install command
-      cmd.exec([]);
+      await cmd.exec([]);
 
       // If we get here, npm succeeded (no process.exit was called)
       expect(exitCalled).toBe(false);
@@ -235,9 +235,9 @@ describe('GitCache Install Command Integration', () => {
 
     try {
       // Should call process.exit when npm install fails
-      expect(() => {
-        cmd.exec([]);
-      }).toThrow();
+      await expect(async () => {
+        await cmd.exec([]);
+      }).rejects.toThrow();
 
       // Verify that process.exit was called
       expect(exitCalled).toBe(true);

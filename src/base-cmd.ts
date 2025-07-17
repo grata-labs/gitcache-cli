@@ -12,7 +12,10 @@ export abstract class BaseCommand {
   /**
    * Execute the command with given arguments
    */
-  abstract exec(args: string[], opts?: Record<string, unknown>): unknown;
+  abstract exec(
+    args: string[],
+    opts?: Record<string, unknown>
+  ): unknown | Promise<unknown>;
 
   /**
    * Get usage information for the command
