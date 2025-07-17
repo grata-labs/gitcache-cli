@@ -26,7 +26,7 @@ describe('Scan Command Unit Tests', () => {
   });
 
   describe('Error handling branches', () => {
-    it('should handle non-Error exceptions in scan execution (line 72)', async () => {
+    it('should handle non-Error exceptions in scan execution', async () => {
       const { scanLockfile } = await import('../../lockfile/scan.js');
       const { existsSync } = await import('node:fs');
 

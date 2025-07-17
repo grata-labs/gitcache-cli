@@ -863,7 +863,7 @@ describe('lockfile scanner', () => {
         },
       ];
 
-      // Mock empty response for HEAD (triggers the error path at lines 389-390)
+      // Mock empty response for HEAD (triggers the error path)
       mockExecSync.mockReturnValue('');
 
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
