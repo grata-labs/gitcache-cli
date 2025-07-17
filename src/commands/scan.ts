@@ -68,9 +68,7 @@ export class Scan extends BaseCommand {
         );
       }
     } catch (error) {
-      throw new Error(
-        `Failed to scan lockfile: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`Failed to scan lockfile: ${String(error)}`);
     }
   }
 

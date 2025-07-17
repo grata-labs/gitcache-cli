@@ -110,9 +110,7 @@ export class Prepare extends BaseCommand {
         console.log('Next npm install will be significantly faster! 🚀');
       }
     } catch (error) {
-      throw new Error(
-        `Failed to prepare cache: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`Failed to prepare cache: ${String(error)}`);
     }
   }
 
@@ -155,7 +153,7 @@ export class Prepare extends BaseCommand {
 
         results.push({ name: dep.name, success: true });
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorMsg = String(error);
 
         if (opts.verbose) {
           console.log(`  ✗ Failed: ${errorMsg}`);

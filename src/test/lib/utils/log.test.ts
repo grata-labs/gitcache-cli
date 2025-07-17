@@ -238,7 +238,7 @@ describe('log utilities', () => {
       }).not.toThrow();
 
       expect(warnSpy).toHaveBeenCalledWith(
-        'Warning: Failed to write to log: Permission denied'
+        'Warning: Failed to write to log: Error: Permission denied'
       );
 
       warnSpy.mockRestore();
@@ -263,7 +263,7 @@ describe('log utilities', () => {
       }).not.toThrow();
 
       expect(warnSpy).toHaveBeenCalledWith(
-        'Warning: Failed to write to log: Unknown error'
+        'Warning: Failed to write to log: string error'
       );
 
       warnSpy.mockRestore();

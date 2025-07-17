@@ -499,7 +499,7 @@ describe('Install Command Unit Tests - Coverage Focused', () => {
 
       // Should handle the non-Error exception and show warning
       expect(console.warn).toHaveBeenCalledWith(
-        '⚠️  Failed to build test-dep: Unknown error'
+        '⚠️  Failed to build test-dep: string error'
       );
     });
 
@@ -526,7 +526,7 @@ describe('Install Command Unit Tests - Coverage Focused', () => {
 
       // Should handle the non-Error exception and show warning
       expect(console.warn).toHaveBeenCalledWith(
-        '⚠️  Cache preparation failed: Unknown error'
+        '⚠️  Cache preparation failed: string error'
       );
       expect(console.log).toHaveBeenCalledWith(
         '⏭️  Continuing with normal install...\n'

@@ -63,7 +63,7 @@ export function resolveRef(repoUrl: string, ref: string): string {
     return sha;
   } catch (error) {
     throw new Error(
-      `Failed to resolve ref '${ref}' for ${repoUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to resolve ref '${ref}' for ${repoUrl}: ${String(error)}`
     );
   }
 }

@@ -58,9 +58,7 @@ export function scanLockfile(lockfilePath: string): LockfileParseResult {
       | LockfileV1Data
       | LockfileV2Data;
   } catch (error) {
-    throw new Error(
-      `Failed to parse lockfile: ${error instanceof Error ? error.message : 'Invalid JSON'}`
-    );
+    throw new Error(`Failed to parse lockfile: ${String(error)}`);
   }
 
   const lockfileVersion =
@@ -128,9 +126,7 @@ function parsePackageJsonGitDeps(packageJsonPath: string): Map<string, string> {
     }
   } catch (error) {
     // package.json parsing failed, continue without it
-    console.warn(
-      `Failed to parse package.json: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
+    console.warn(`Failed to parse package.json: ${String(error)}`);
   }
 
   return gitDeps;
@@ -341,7 +337,7 @@ export async function resolveGitReferences(
       });
     } catch (error) {
       console.warn(
-        `Failed to resolve ${dep.name}@${dep.reference}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to resolve ${dep.name}@${dep.reference}: ${String(error)}`
       );
 
       // Include unresolved dependency with warning
@@ -398,7 +394,7 @@ async function resolveRefToSha(repoUrl: string, ref: string): Promise<string> {
     return sha;
   } catch (error) {
     throw new Error(
-      `Failed to resolve ref '${ref}' for ${repoUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to resolve ref '${ref}' for ${repoUrl}: ${String(error)}`
     );
   }
 }

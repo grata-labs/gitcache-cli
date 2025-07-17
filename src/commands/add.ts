@@ -51,7 +51,7 @@ export class Add extends BaseCommand {
         console.log(`Resolved ${opts.ref} → ${resolvedSha}`);
       } catch (error) {
         console.warn(
-          `Warning: Failed to resolve ref '${opts.ref}': ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Warning: Failed to resolve ref '${opts.ref}': ${String(error)}`
         );
       }
     }
@@ -75,7 +75,7 @@ export class Add extends BaseCommand {
             console.log(`Building tarball for HEAD → ${buildSha}`);
           } catch (error) {
             console.warn(
-              `Warning: Could not resolve HEAD for tarball build: ${error instanceof Error ? error.message : 'Unknown error'}`
+              `Warning: Could not resolve HEAD for tarball build: ${String(error)}`
             );
             return targetPath;
           }
@@ -86,9 +86,7 @@ export class Add extends BaseCommand {
         });
         console.log(`✓ Tarball cached: ${result.tarballPath}`);
       } catch (error) {
-        console.warn(
-          `Warning: Failed to build tarball: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
+        console.warn(`Warning: Failed to build tarball: ${String(error)}`);
       }
     }
 

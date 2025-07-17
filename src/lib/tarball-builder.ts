@@ -191,7 +191,7 @@ export class TarballBuilder {
       });
     } catch (error) {
       throw new Error(
-        `Failed to checkout commit ${commitSha}: ${error instanceof Error ? error.message : /* c8 ignore next - non-Error exceptions are rare edge cases that are difficult to reproduce in tests */ 'Unknown error'}`
+        `Failed to checkout commit ${commitSha}: ${String(error)}`
       );
     }
   }
@@ -241,7 +241,7 @@ export class TarballBuilder {
           });
         } catch (installError) {
           throw new Error(
-            `Both npm ci and npm install failed: ${installError instanceof Error ? installError.message : 'Unknown error'}`
+            `Both npm ci and npm install failed: ${String(installError)}`
           );
         }
       }
@@ -282,9 +282,7 @@ export class TarballBuilder {
 
       return { tarballFile, packageInfo };
     } catch (error) {
-      throw new Error(
-        `Failed to build package: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      throw new Error(`Failed to build package: ${String(error)}`);
     }
   }
 
@@ -296,9 +294,7 @@ export class TarballBuilder {
       const hash = output.split(' ')[0];
       return `sha256-${Buffer.from(hash, 'hex').toString('base64')}`;
     } catch (error) {
-      throw new Error(
-        `Failed to calculate integrity: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      throw new Error(`Failed to calculate integrity: ${String(error)}`);
     }
   }
 
