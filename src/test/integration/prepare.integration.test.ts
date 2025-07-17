@@ -657,7 +657,7 @@ describe('GitCache Prepare Command Integration', () => {
       };
       process.stdout.write = vi.fn(() => true);
 
-      // Mock buildTarball to throw an error to test verbose error handling (line 162)
+      // Mock buildTarball to throw an error to test verbose error handling
       const mockBuildTarball = vi
         .fn()
         .mockRejectedValue(new Error('Simulated build failure'));
@@ -677,7 +677,7 @@ describe('GitCache Prepare Command Integration', () => {
         console.log = originalLog;
         process.stdout.write = originalStdoutWrite;
 
-        // Verify verbose error message format is used (covers line 162)
+        // Verify verbose error message format is used
         expect(output).toContain('✗ Failed:');
       } finally {
         console.log = originalLog;
@@ -743,7 +743,7 @@ describe('GitCache Prepare Command Integration', () => {
 
         const fullOutput = output.join('\n');
 
-        // Verify singular dependency grammar (covers line 53)
+        // Verify singular dependency grammar
         expect(fullOutput).toContain('Found 1 Git dependency:');
       } finally {
         rmSync(testWorkingDir, { recursive: true, force: true });
@@ -808,7 +808,7 @@ describe('GitCache Prepare Command Integration', () => {
 
         const fullOutput = output.join('\n');
 
-        // Verify singular failed dependency grammar (covers line 70)
+        // Verify singular failed dependency grammar
         expect(fullOutput).toContain(
           '⚠ Warning: 1 dependency could not be resolved:'
         );

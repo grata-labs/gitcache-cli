@@ -1208,7 +1208,7 @@ describe('TarballBuilder', () => {
             return '';
           }
           if (typeof cmd === 'string' && cmd.includes('npm pack')) {
-            // Return empty string to test the fallback to 'package.tgz' (line 251)
+            // Return empty string to test the fallback to 'package.tgz'
             const tarballPath = join(mockWorkingDir, 'package.tgz');
             writeFileSync(tarballPath, 'fake tarball content');
             return '';

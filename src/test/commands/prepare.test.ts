@@ -1,23 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Prepare } from '../../commands/prepare.js';
+import type { TarballBuilder } from '../../lib/tarball-builder.js';
 
 // Mock the dependencies
-vi.mock('../../lockfile/scan.js', () => ({
-  scanLockfile: vi.fn(),
-  resolveGitReferences: vi.fn(),
-}));
-
-vi.mock('../../lib/utils/git.js', () => ({
-  resolveRef: vi.fn(),
-}));
-
-vi.mock('../../lib/tarball-builder.js', () => ({
-  createTarballBuilder: vi.fn(),
-}));
-
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-// Mock the dependencies at the top level before imports
 vi.mock('../../lockfile/scan.js', () => ({
   scanLockfile: vi.fn(),
   resolveGitReferences: vi.fn(),
@@ -36,9 +21,6 @@ vi.mock('node:fs', () => ({
   readFileSync: vi.fn(),
 }));
 
-import { Prepare } from '../../commands/prepare.js';
-import type { TarballBuilder } from '../../lib/tarball-builder.js';
-
 describe('Prepare Command Unit Tests', () => {
   let prepare: Prepare;
 
@@ -52,7 +34,7 @@ describe('Prepare Command Unit Tests', () => {
   });
 
   describe('Error handling branches', () => {
-    it('should handle non-Error exceptions in prepare execution (line 114)', async () => {
+    it('should handle non-Error exceptions in prepare execution', async () => {
       const { scanLockfile } = await import('../../lockfile/scan.js');
       const { existsSync } = await import('node:fs');
 
@@ -114,7 +96,7 @@ describe('Prepare Command Unit Tests', () => {
   });
 
   describe('Grammar branches', () => {
-    it('should use singular form when dependencies.length === 1 (line 53)', async () => {
+    it('should use singular form when dependencies.length === 1', async () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
@@ -176,7 +158,7 @@ describe('Prepare Command Unit Tests', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should handle non-Error exceptions in tarball building (line 159)', async () => {
+    it('should handle non-Error exceptions in tarball building', async () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
@@ -300,7 +282,7 @@ describe('Prepare Command Unit Tests', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should use plural form when dependencies.length > 1 (line 53)', async () => {
+    it('should use plural form when dependencies.length > 1', async () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
