@@ -27,6 +27,42 @@ function registerCommand(
         instance.exec(args);
       });
     /* c8 ignore end */
+  } else if (name === 'scan' || name === 'prepare') {
+    // Handle scan and prepare commands (no repo argument required)
+    const cmd = program.command(name).description(config.description);
+
+    // Add options based on the command's static params
+    if (config.command.params) {
+      config.command.params.forEach((param: string) => {
+        if (param === 'lockfile') {
+          cmd.option(
+            '-l, --lockfile <path>',
+            'path to lockfile (default: package-lock.json)'
+          );
+        } else if (param === 'json') {
+          cmd.option('--json', 'output in JSON format');
+        } else if (param === 'force') {
+          cmd.option('-f, --force', 'overwrite existing tarballs');
+        } else if (param === 'verbose') {
+          cmd.option('-v, --verbose', 'verbose output');
+        }
+      });
+    }
+
+    cmd
+      /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
+      .action(async (opts: Record<string, unknown>) => {
+        const instance = new config.command();
+        const result = instance.exec([], opts);
+
+        // Handle both sync and async commands
+        const finalResult = result instanceof Promise ? await result : result;
+
+        if (finalResult !== undefined && finalResult !== null) {
+          console.log(finalResult);
+        }
+      });
+    /* c8 ignore end */
   } else {
     // Default command pattern for add/cache commands
     const cmd = program
