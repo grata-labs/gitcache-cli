@@ -136,14 +136,39 @@ export class TarballBuilder {
     return Promise.all(promises);
   }
 
+  /**
+   * Parse Git URL to extract just the repository URL without fragments or query parameters
+   */
+  private parseGitUrl(gitUrl: string): string {
+    try {
+      // Remove git+ prefix if present
+      let cleanUrl = gitUrl.replace(/^git\+/, '');
+
+      // Parse the URL to remove fragment (everything after #)
+      const url = new URL(cleanUrl);
+
+      // Reconstruct URL without fragment or query
+      return `${url.protocol}//${url.host}${url.pathname}`;
+    } catch {
+      // If URL parsing fails, try simple fragment removal
+      return gitUrl
+        .replace(/^git\+/, '')
+        .split('#')[0]
+        .split('?')[0];
+    }
+  }
+
   private checkoutCommit(
     gitUrl: string,
     commitSha: string,
     targetDir: string
   ): void {
     try {
+      // Parse the Git URL to remove any fragment (commit hash) that might be included
+      const cleanGitUrl = this.parseGitUrl(gitUrl);
+
       // Clone with depth 1 for efficiency, then checkout specific commit
-      execSync(`git clone --depth 1 "${gitUrl}" "${targetDir}"`, {
+      execSync(`git clone --depth 1 "${cleanGitUrl}" "${targetDir}"`, {
         stdio: 'pipe',
         encoding: 'utf8',
       });
