@@ -4,6 +4,7 @@
 /node_modules
 
 # Test coverage
+/temp*
 coverage/
 *.lcov
 
