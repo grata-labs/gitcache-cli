@@ -248,14 +248,14 @@ describe('Install command', () => {
 
     // Mock Windows behavior: status is undefined but no error (success)
     mockSpawnSync.mockReturnValue({
-      status: undefined,
+      status: null,
       error: undefined,
       pid: 0,
-      output: [],
+      output: [null, Buffer.from(''), Buffer.from('')],
       stdout: Buffer.from(''),
       stderr: Buffer.from(''),
       signal: null,
-    } as any as SpawnSyncReturns<Buffer>);
+    } satisfies SpawnSyncReturns<Buffer>);
 
     const install = new Install();
 

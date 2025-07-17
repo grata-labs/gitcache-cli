@@ -33,7 +33,7 @@ export class Install extends BaseCommand {
       } catch (mkdirError) {
         // Directory might already exist, which is fine
         // Only log if it's a real error
-        if ((mkdirError as any)?.code !== 'EEXIST') {
+        if ((mkdirError as NodeJS.ErrnoException)?.code !== 'EEXIST') {
           console.warn(
             `Warning: Could not create cache directory: ${(mkdirError as Error).message}`
           );

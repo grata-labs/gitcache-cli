@@ -38,16 +38,20 @@ describe('GitCache Install Command Integration', () => {
   });
 
   it('should handle npm install with actual package installation', async () => {
-    // Create a package.json with a very small, fast-installing dependency
+    // Create a temp directory for this test
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'gitcache-integration-test-')
+    );
+
+    // Create a simple package.json that uses a real, small package
     await fs.writeFile(
       path.join(tempDir, 'package.json'),
       JSON.stringify(
         {
-          name: 'test-package',
+          name: 'test-project',
           version: '1.0.0',
           dependencies: {
-            // Use a very small package for testing
-            ms: '^2.1.3',
+            ms: '^2.1.3', // Small, stable package that should always be available
           },
         },
         null,
@@ -65,13 +69,13 @@ describe('GitCache Install Command Integration', () => {
     // Mock process.exit to prevent actual process termination
     const originalExit = process.exit;
     let exitCalled = false;
-    let exitCode: any;
+    let exitCode: number | undefined;
 
     process.exit = vi.fn((code?: number) => {
       exitCalled = true;
       exitCode = code;
       throw new Error(`Process exit called with code ${code}`);
-    }) as any;
+    }) as typeof process.exit;
 
     try {
       // Run the install command
@@ -141,13 +145,13 @@ describe('GitCache Install Command Integration', () => {
     // Mock process.exit to prevent actual process termination
     const originalExit = process.exit;
     let exitCalled = false;
-    let exitCode: any;
+    let exitCode: number | undefined;
 
     process.exit = vi.fn((code?: number) => {
       exitCalled = true;
       exitCode = code;
       throw new Error(`Process exit called with code ${code}`);
-    }) as any;
+    }) as typeof process.exit;
 
     try {
       // Run the install command
@@ -221,13 +225,13 @@ describe('GitCache Install Command Integration', () => {
     // Mock process.exit to capture exit calls instead of actually exiting
     const originalExit = process.exit;
     let exitCalled = false;
-    let capturedExitCode: any;
+    let capturedExitCode: number | undefined;
 
     process.exit = vi.fn((code?: number) => {
       exitCalled = true;
       capturedExitCode = code;
       throw new Error(`Process exit called with code ${code}`);
-    }) as any;
+    }) as typeof process.exit;
 
     try {
       // Should call process.exit when npm install fails
