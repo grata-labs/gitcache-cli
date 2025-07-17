@@ -18,6 +18,7 @@ Thumbs.db
 
 # IDE files
 .vscode/
+.github/instructions
 .idea/
 *.swp
 *.swo
