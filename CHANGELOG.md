@@ -1,3 +1,19 @@
+# [1.2.0](https://github.com/grata-labs/gitcache-cli/compare/v1.1.0...v1.2.0) (2025-07-18)
+
+
+### Bug Fixes
+
+* handle windows specific exits from spawn ([66f1261](https://github.com/grata-labs/gitcache-cli/commit/66f12618e462753fb8d1c851185634f4ac65264b))
+* tarball builder uses a clean url for clone ([#66](https://github.com/grata-labs/gitcache-cli/issues/66)) ([6cc4248](https://github.com/grata-labs/gitcache-cli/commit/6cc4248a175bc923b1f137c7369e19a527d5417c))
+
+
+### Features
+
+* add scan and prepare ([2f9ef0d](https://github.com/grata-labs/gitcache-cli/commit/2f9ef0d1e06ea39a5f9e5238443330e421a01b8d))
+* added analyze command ([658578b](https://github.com/grata-labs/gitcache-cli/commit/658578b474cf70c032412b0840b0ca17dba6ccb9))
+* implements lockfile scanner ([#64](https://github.com/grata-labs/gitcache-cli/issues/64)) ([cf0f7ba](https://github.com/grata-labs/gitcache-cli/commit/cf0f7bafa9623c30bb7b0714430a2e968a5bc487))
+* install automatically uses prepare/cache ([02d590b](https://github.com/grata-labs/gitcache-cli/commit/02d590b61e50f8f69ba4184bd59d6e9f1dbef90d))
+
 # [1.1.0](https://github.com/grata-labs/gitcache-cli/compare/v1.0.0...v1.1.0) (2025-07-10)
 
 
