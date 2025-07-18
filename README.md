@@ -1,6 +1,6 @@
 # GitCache CLI
 
-> Universal Git-dependency cache & proxy — _CLI client_
+> Universal Git-dependency cache — _CLI for local caching, lockfile analysis, and optimized installs_
 
 ![CI](https://github.com/grata-labs/gitcache-cli/actions/workflows/ci.yml/badge.svg)
 [![Integration: macOS](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-macos.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-macos.yml)
@@ -8,7 +8,7 @@
 [![Integration: Ubuntu](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml)
 [![npm version](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli.svg)](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli)
 
-A TypeScript CLI for caching Git repositories locally and (coming soon) syncing with team-shared GitCache proxies.
+A TypeScript CLI for caching Git repositories locally, analyzing lockfiles, and accelerating npm installs. Team-shared GitCache proxy support is coming soon.
 
 ## Installation
 
@@ -47,7 +47,7 @@ gitcache cache --help
 
 ## How it works
 
-GitCache CLI mirrors Git repositories to `~/.gitcache/` using `git clone --mirror`. This creates a bare repository that can be used as a local cache for faster subsequent clones and fetches.
+GitCache CLI mirrors Git repositories to `~/.gitcache/` using `git clone --mirror`, creating a bare repository for fast local caching. It scans your lockfile for Git dependencies, resolves references, and pre-builds tarballs for optimized npm installs. All install operations use the local cache for maximum speed. Team cache/proxy support is coming soon.
 
 ## Roadmap
 
