@@ -2,13 +2,19 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BaseCommand } from '../base-cmd.js';
+import { getDefaultMaxCacheSize } from '../lib/config.js';
+import {
+  calculateCacheSize,
+  formatBytes,
+  parseSizeToBytes,
+} from '../lib/prune.js';
+import { TarballBuilder } from '../lib/tarball-builder.js';
 import {
   getCacheDir,
-  getTarballCachePath,
   getPlatformIdentifier,
+  getTarballCachePath,
 } from '../lib/utils/path.js';
-import { scanLockfile, resolveGitReferences } from '../lockfile/scan.js';
-import { TarballBuilder } from '../lib/tarball-builder.js';
+import { resolveGitReferences, scanLockfile } from '../lockfile/scan.js';
 
 /**
  * Install command - runs npm install with gitcache as the npm cache
@@ -73,6 +79,9 @@ export class Install extends BaseCommand {
       if (exitCode !== 0) {
         process.exit(exitCode);
       }
+
+      // Show cache size information after successful install
+      this.showCacheSizeInfo();
     } catch (error) {
       // Re-throw the error to let the CLI handle it
       throw error;
@@ -204,5 +213,38 @@ export class Install extends BaseCommand {
     const tarballCacheDir = getTarballCachePath(commitSha, platform);
     const tarballPath = join(tarballCacheDir, 'package.tgz');
     return existsSync(tarballPath);
+  }
+
+  /**
+   * Show cache size information and pruning advice after install
+   */
+  private showCacheSizeInfo(): void {
+    try {
+      const cacheSize = calculateCacheSize();
+      const defaultMaxSize = getDefaultMaxCacheSize();
+      const defaultLimit = parseSizeToBytes(defaultMaxSize);
+
+      console.log(`📊 Cache size: ${formatBytes(cacheSize)}`);
+
+      // Show advice if cache is getting large
+      if (cacheSize > defaultLimit * 0.8) {
+        // 80% of default limit
+        console.log(
+          `💡 Your cache is getting large (${formatBytes(cacheSize)})`
+        );
+        console.log(`   Consider running: gitcache prune`);
+        if (cacheSize > defaultLimit) {
+          console.log(
+            `   Or set a custom limit: gitcache prune --max-size 10GB --set-default`
+          );
+        }
+      } else if (cacheSize > defaultLimit * 0.5) {
+        // 50% of default limit
+        console.log(`💡 Run 'gitcache prune' to manage cache size when needed`);
+      }
+    } catch {
+      // Don't fail the install if cache size calculation fails
+      // This is just informational
+    }
   }
 }

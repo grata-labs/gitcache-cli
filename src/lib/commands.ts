@@ -1,8 +1,10 @@
 import { Add } from '../commands/add.js';
-import { Install } from '../commands/install.js';
-import { Scan } from '../commands/scan.js';
-import { Prepare } from '../commands/prepare.js';
 import { Analyze } from '../commands/analyze.js';
+import { Config } from '../commands/config.js';
+import { Install } from '../commands/install.js';
+import { Prepare } from '../commands/prepare.js';
+import { Prune } from '../commands/prune.js';
+import { Scan } from '../commands/scan.js';
 import type { CommandConfig } from './types.js';
 
 /**
@@ -30,5 +32,13 @@ export const commands: Record<string, CommandConfig> = {
   analyze: {
     command: Analyze,
     description: Analyze.description,
+  },
+  prune: {
+    command: Prune,
+    description: Prune.description,
+  },
+  config: {
+    command: Config,
+    description: Config.description,
   },
 };
