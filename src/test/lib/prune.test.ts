@@ -248,6 +248,43 @@ describe('prune', () => {
       expect(existsSync(entryDir)).toBe(true);
     });
 
+    it('should actually delete entries when not a dry run', () => {
+      const tarballsDir = join(tempTestDir, 'tarballs');
+      mkdirSync(tarballsDir, { recursive: true });
+
+      // Create two cache entries that together exceed 100 bytes
+      const entries = [
+        { sha: 'abcdef', platform: 'test-x64', size: 60 },
+        { sha: '123456', platform: 'test-x64', size: 60 },
+      ];
+
+      entries.forEach((entry) => {
+        const entryDir = join(tarballsDir, `${entry.sha}-${entry.platform}`);
+        mkdirSync(entryDir, { recursive: true });
+        writeFileSync(join(entryDir, 'package.tgz'), 'x'.repeat(entry.size));
+      });
+
+      // Confirm both entries exist
+      entries.forEach((entry) => {
+        const entryDir = join(tarballsDir, `${entry.sha}-${entry.platform}`);
+        expect(existsSync(entryDir)).toBe(true);
+      });
+
+      // Prune with a limit that will require deleting at least one entry
+      const result = pruneCacheToSize('100B', { dryRun: false });
+
+      expect(result.wasWithinLimit).toBe(false);
+      expect(result.entriesDeleted).toBeGreaterThan(0);
+      expect(result.spaceSaved).toBeGreaterThan(0);
+
+      // At least one entry should be deleted
+      const deletedCount = entries.filter(
+        (entry) =>
+          !existsSync(join(tarballsDir, `${entry.sha}-${entry.platform}`))
+      ).length;
+      expect(deletedCount).toBeGreaterThan(0);
+    });
+
     it('should prune oldest entries when cache exceeds limit', () => {
       const tarballsDir = join(tempTestDir, 'tarballs');
       mkdirSync(tarballsDir, { recursive: true });
