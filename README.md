@@ -6,7 +6,7 @@
 [![Integration: macOS](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-macos.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-macos.yml)
 [![Integration: Windows](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-windows.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-windows.yml)
 [![Integration: Ubuntu](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml)
-[![npm version](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli.svg)](https://badge.fury.io/js/@grata-labs%2Fgitcache-cli)
+[![npm version](https://img.shields.io/npm/v/@grata-labs/gitcache-cli.svg)](https://www.npmjs.com/package/@grata-labs/gitcache-cli)
 
 A TypeScript CLI for caching Git repositories locally, analyzing lockfiles, and accelerating npm installs. Team-shared GitCache proxy support is coming soon.
 
