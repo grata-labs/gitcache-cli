@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/grata-labs/gitcache-cli/compare/v1.2.0...v1.3.0) (2025-07-19)
+
+
+### Features
+
+* Added prune and config commands ([a865849](https://github.com/grata-labs/gitcache-cli/commit/a8658497daa39ebc5b960f9734bfa58ed09805bf))
+
 # [1.2.0](https://github.com/grata-labs/gitcache-cli/compare/v1.1.0...v1.2.0) (2025-07-18)
 
 
