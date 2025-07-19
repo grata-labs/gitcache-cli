@@ -30,8 +30,14 @@ function registerCommand(
         result instanceof Promise ? await result : result;
       });
     /* c8 ignore end */
-  } else if (name === 'scan' || name === 'prepare' || name === 'analyze') {
-    // Handle scan, prepare, and analyze commands (no repo argument required)
+  } else if (
+    name === 'scan' ||
+    name === 'prepare' ||
+    name === 'analyze' ||
+    name === 'config' ||
+    name === 'prune'
+  ) {
+    // Handle scan, prepare, analyze, config, and prune commands (no repo argument required)
     const cmd = program.command(name).description(config.description);
 
     // Add options based on the command's static params
@@ -48,6 +54,24 @@ function registerCommand(
           cmd.option('-f, --force', 'overwrite existing tarballs');
         } else if (param === 'verbose') {
           cmd.option('-v, --verbose', 'verbose output');
+        } else if (param === 'max-size') {
+          cmd.option('--max-size <size>', 'maximum cache size (default: 5GB)');
+        } else if (param === 'dry-run') {
+          cmd.option(
+            '--dry-run',
+            'preview what would be deleted without actually deleting'
+          );
+        } else if (param === 'set-default') {
+          cmd.option(
+            '--set-default',
+            'save the specified max-size as the new default'
+          );
+        } else if (param === 'get') {
+          cmd.option('--get <key>', 'get configuration value');
+        } else if (param === 'set') {
+          cmd.option('--set <key=value>', 'set configuration value');
+        } else if (param === 'list') {
+          cmd.option('--list', 'list all configuration values');
         }
       });
     }
