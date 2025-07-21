@@ -56,7 +56,7 @@ GitCache CLI mirrors Git repositories to `~/.gitcache/` using `git clone --mirro
 - ✅ **Install command with lockfile integration** — optimized install using cache
 - ⏳ **Team cache** — push mirrors to S3-backed GitCache proxy
 - ⏳ **Integrity verification** — signed manifests
-- ⏳ **Build-tool plugins** — npm, pip, go mod, cargo
+- ⏳ **Enhanced npm integration** — advanced npm workflow optimizations
 
 ## Development
 
