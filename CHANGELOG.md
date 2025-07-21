@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/grata-labs/gitcache-cli/compare/v1.3.0...v1.3.1) (2025-07-21)
+
+
+### Bug Fixes
+
+* Fix install command for Windows ([6c544e4](https://github.com/grata-labs/gitcache-cli/commit/6c544e4fcfae49e3c14a03fa8bc38976511c9481))
+
 # [1.3.0](https://github.com/grata-labs/gitcache-cli/compare/v1.2.0...v1.3.0) (2025-07-19)
 
 
