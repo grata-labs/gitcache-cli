@@ -6,9 +6,10 @@ import { platform, arch } from 'node:os';
  * Get the cache directory path
  */
 export function getCacheDir(): string {
-  const homeDir = process.env.HOME;
+  // On Windows, use USERPROFILE; on Unix-like systems, use HOME
+  const homeDir = process.env.HOME || process.env.USERPROFILE;
   if (!homeDir) {
-    throw new Error('HOME environment variable is not set');
+    throw new Error('HOME or USERPROFILE environment variable is not set');
   }
   return join(homeDir, '.gitcache');
 }

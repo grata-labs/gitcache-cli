@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+  utimesSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -258,11 +264,31 @@ describe('prune', () => {
         { sha: 'def456abc123', platform: 'linux-x64', size: 50 },
       ];
 
-      entries.forEach((entry) => {
-        const entryDir = join(tarballsDir, `${entry.sha}-${entry.platform}`);
-        mkdirSync(entryDir, { recursive: true });
-        writeFileSync(join(entryDir, 'package.tgz'), 'x'.repeat(entry.size));
-      });
+      // Create first entry (older) with explicit timestamp
+      const firstEntryDir = join(
+        tarballsDir,
+        `${entries[0].sha}-${entries[0].platform}`
+      );
+      mkdirSync(firstEntryDir, { recursive: true });
+      const firstTarball = join(firstEntryDir, 'package.tgz');
+      writeFileSync(firstTarball, 'x'.repeat(entries[0].size));
+
+      // Set an older time for the first entry
+      const olderTime = new Date(Date.now() - 60000); // 1 minute ago
+      try {
+        utimesSync(firstTarball, olderTime, olderTime);
+      } catch {
+        // If utimes fails, try touch with fs operations
+      }
+
+      // Create second entry (newer) with current time
+      const secondEntryDir = join(
+        tarballsDir,
+        `${entries[1].sha}-${entries[1].platform}`
+      );
+      mkdirSync(secondEntryDir, { recursive: true });
+      const secondTarball = join(secondEntryDir, 'package.tgz');
+      writeFileSync(secondTarball, 'x'.repeat(entries[1].size));
 
       const result = pruneCacheToSize('100B');
 

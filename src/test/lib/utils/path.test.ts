@@ -26,11 +26,35 @@ describe('path utilities', () => {
       expect(result).toBe(expected);
     });
 
-    it('should throw error when HOME is not set', () => {
+    it('should return .gitcache directory in USERPROFILE on Windows', () => {
+      const originalHome = process.env.HOME;
       delete process.env.HOME;
+      process.env.USERPROFILE = 'C:\\Users\\testuser';
+
+      const result = getCacheDir();
+      const expected = join('C:\\Users\\testuser', '.gitcache');
+      expect(result).toBe(expected);
+
+      // Restore original value
+      if (originalHome !== undefined) process.env.HOME = originalHome;
+      delete process.env.USERPROFILE;
+    });
+
+    it('should throw error when HOME is not set', () => {
+      const originalHome = process.env.HOME;
+      const originalUserProfile = process.env.USERPROFILE;
+
+      delete process.env.HOME;
+      delete process.env.USERPROFILE;
+
       expect(() => getCacheDir()).toThrow(
-        'HOME environment variable is not set'
+        'HOME or USERPROFILE environment variable is not set'
       );
+
+      // Restore original values
+      if (originalHome !== undefined) process.env.HOME = originalHome;
+      if (originalUserProfile !== undefined)
+        process.env.USERPROFILE = originalUserProfile;
     });
   });
 

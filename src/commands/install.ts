@@ -58,9 +58,10 @@ export class Install extends BaseCommand {
 
       // Execute npm install with gitcache as cache
       const result = spawnSync('npm', npmArgs, {
-        stdio: 'inherit',
+        stdio: 'inherit', // Show npm output to user
         env,
         cwd: process.cwd(),
+        shell: process.platform === 'win32', // Use shell on Windows
       });
 
       // Handle cross-platform differences in spawnSync return values
@@ -77,7 +78,7 @@ export class Install extends BaseCommand {
       // If status is null/undefined and no error, treat as success (exitCode = 0)
 
       if (exitCode !== 0) {
-        process.exit(exitCode);
+        throw new Error(`npm install failed with exit code ${exitCode}`);
       }
 
       // Show cache size information after successful install

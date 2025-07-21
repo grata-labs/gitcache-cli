@@ -52,7 +52,7 @@ describe('GitCache Install Command Integration - Simple Tests', () => {
     } finally {
       process.chdir(originalCwd);
     }
-  });
+  }, 15000); // 15 seconds timeout for Windows CI
 
   it('should use gitcache directory for npm cache', async () => {
     const packageJson = {

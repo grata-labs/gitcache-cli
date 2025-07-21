@@ -70,6 +70,7 @@ describe('Install command', () => {
         NPM_CONFIG_CACHE: getExpectedCachePath(),
       },
       cwd: process.cwd(),
+      shell: process.platform === 'win32',
     });
   });
 
@@ -97,6 +98,7 @@ describe('Install command', () => {
           NPM_CONFIG_CACHE: getExpectedCachePath(),
         },
         cwd: process.cwd(),
+        shell: process.platform === 'win32',
       }
     );
   });
@@ -125,6 +127,7 @@ describe('Install command', () => {
           NPM_CONFIG_CACHE: getExpectedCachePath(),
         },
         cwd: process.cwd(),
+        shell: process.platform === 'win32',
       }
     );
   });
@@ -153,6 +156,7 @@ describe('Install command', () => {
           NPM_CONFIG_CACHE: getExpectedCachePath(),
         },
         cwd: process.cwd(),
+        shell: process.platform === 'win32',
       }
     );
   });
@@ -191,9 +195,11 @@ describe('Install command', () => {
 
     const install = new Install();
 
-    // Should call process.exit(1) when npm returns status 1
-    await expect(install.exec()).rejects.toThrow('process.exit called');
-    expect(mockExit).toHaveBeenCalledWith(1);
+    // Should throw error when npm returns status 1
+    await expect(install.exec()).rejects.toThrow(
+      'npm install failed with exit code 1'
+    );
+    expect(mockExit).not.toHaveBeenCalled();
 
     // Restore the original process.exit
     mockExit.mockRestore();
@@ -226,6 +232,7 @@ describe('Install command', () => {
 
     expect(mockSpawnSync).toHaveBeenCalledWith('npm', ['install'], {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         npm_config_cache: getExpectedCachePath(),
@@ -256,6 +263,7 @@ describe('Install command', () => {
     await expect(install.exec()).resolves.not.toThrow();
     expect(mockSpawnSync).toHaveBeenCalledWith('npm', ['install'], {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         npm_config_cache: getExpectedCachePath(),
@@ -287,9 +295,11 @@ describe('Install command', () => {
 
     const install = new Install();
 
-    // Should call process.exit(1) when status is null but there's an error
-    await expect(install.exec()).rejects.toThrow('process.exit called');
-    expect(mockExit).toHaveBeenCalledWith(1);
+    // Should throw error when status is null but there's an error
+    await expect(install.exec()).rejects.toThrow(
+      'npm install failed with exit code 1'
+    );
+    expect(mockExit).not.toHaveBeenCalled();
 
     // Restore the original process.exit
     mockExit.mockRestore();
@@ -366,6 +376,7 @@ describe('Install command', () => {
     // Verify npm install was still called
     expect(mockSpawnSync).toHaveBeenCalledWith('npm', ['install'], {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         npm_config_cache: getExpectedCachePath(),
@@ -413,6 +424,7 @@ describe('Install command', () => {
     // Verify npm install was still called despite lockfile error
     expect(mockSpawnSync).toHaveBeenCalledWith('npm', ['install'], {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         npm_config_cache: getExpectedCachePath(),
