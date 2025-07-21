@@ -1,9 +1,15 @@
 name: CI
 on:
   push:
+    branches: [main] # Only run on main branch pushes
   pull_request:
     # Only run for trusted events to save Actions minutes
     types: [opened, synchronize, reopened, ready_for_review]
+
+# Prevent duplicate runs for PRs from the same repo
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Check if we need to run full CI or just docs validation
@@ -138,6 +144,31 @@ jobs:
   # STAGE 3: Extended validation (only runs if Stage 2 passes)
   # Unit tests only - integration already validated in Stage 2
   # ============================================================================
+
+  # Windows Integration Tests - Critical for cross-platform compatibility
+  test-windows-integration:
+    name: 'Windows Integration: Critical Tests'
+    needs: [changes, test-primary, build-primary]
+    runs-on: windows-latest
+    if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-non-test-code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Run Windows integration tests
+        run: npm run test:integration
+        timeout-minutes: 15
+      - name: Upload Windows integration results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-windows-critical
+          path: |
+            coverage/
+            test-results.xml
+        if: always()
 
   test-matrix:
     name: 'Extended: ${{ matrix.os }} + Node ${{ matrix.node }}'
@@ -281,6 +312,7 @@ jobs:
         typecheck,
         test-primary,
         build-primary,
+        test-windows-integration,
         test-matrix,
         docs-check,
         tests-check,
@@ -324,7 +356,11 @@ jobs:
               echo "❌ Stage 2 (Core testing) failed"
               exit 1
             fi
-            # Stage 3: Extended validation
+            # Stage 3: Extended validation (including Windows integration)
+            if [[ "${{ needs.test-windows-integration.result }}" != "success" ]]; then
+              echo "❌ Stage 3 (Windows integration) failed"
+              exit 1
+            fi
             if [[ "${{ needs.test-matrix.result }}" != "success" ]]; then
               echo "❌ Stage 3 (Extended validation) failed"
               exit 1

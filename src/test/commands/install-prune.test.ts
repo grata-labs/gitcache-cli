@@ -176,7 +176,7 @@ describe('Install Cache Size Reporting', () => {
     }
 
     expect(mockCalculateCacheSize).not.toHaveBeenCalled();
-    expect(mockExit).toHaveBeenCalledWith(1);
+    expect(mockExit).not.toHaveBeenCalled();
 
     mockExit.mockRestore();
   });

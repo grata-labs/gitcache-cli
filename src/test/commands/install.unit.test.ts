@@ -118,10 +118,12 @@ describe('Install Command Unit Tests - Coverage Focused', () => {
         pid: 12345,
       });
 
-      await expect(installCommand.exec([])).rejects.toThrow('Process exited');
+      await expect(installCommand.exec([])).rejects.toThrow(
+        'npm install failed with exit code 1'
+      );
 
-      // Should exit with code 1 when there's an error but no status
-      expect(process.exit).toHaveBeenCalledWith(1);
+      // Should not call process.exit when throwing error
+      expect(process.exit).not.toHaveBeenCalled();
     });
 
     it('should handle success with null status (Windows)', async () => {
@@ -160,10 +162,12 @@ describe('Install Command Unit Tests - Coverage Focused', () => {
         pid: 12345,
       });
 
-      await expect(installCommand.exec([])).rejects.toThrow('Process exited');
+      await expect(installCommand.exec([])).rejects.toThrow(
+        'npm install failed with exit code 1'
+      );
 
-      // Should exit with code 1 when status is undefined but there's an error
-      expect(process.exit).toHaveBeenCalledWith(1);
+      // Should not call process.exit when throwing error
+      expect(process.exit).not.toHaveBeenCalled();
     });
   });
 

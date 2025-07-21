@@ -59,22 +59,29 @@ describe('Prune Integration Tests', () => {
       },
     ];
 
-    entries.forEach((entry, index) => {
+    // Create files with guaranteed different timestamps
+    for (let index = 0; index < entries.length; index++) {
+      const entry = entries[index];
       const entryDir = join(tarballsDir, `${entry.sha}-${entry.platform}`);
       mkdirSync(entryDir, { recursive: true });
-      writeFileSync(join(entryDir, 'package.tgz'), entry.content);
+      const tarballFile = join(entryDir, 'package.tgz');
+      writeFileSync(tarballFile, entry.content);
 
       // Set different access times to test LRU behavior
       // First entry (index 0) is older, second entry is newer
       const now = Date.now();
       const accessTime = new Date(now - (1 - index) * 60000); // 1 minute apart
-      const stat = { atime: accessTime, mtime: accessTime };
       try {
-        require('fs').utimesSync(entryDir, stat.atime, stat.mtime);
+        require('fs').utimesSync(tarballFile, accessTime, accessTime);
       } catch {
-        // Some file systems might not support setting times
+        // If utimes fails, use file creation order as fallback
+        // Sleep to ensure different modification times
+        if (index < entries.length - 1) {
+          // Use a promise-based sleep to ensure timing
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
       }
-    });
+    }
 
     // Prune with 1KB limit (total size is ~1100 bytes, should delete oldest)
     await prune.exec([], { 'max-size': '1KB' });
