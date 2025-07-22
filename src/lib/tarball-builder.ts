@@ -4,11 +4,12 @@ import {
   rmSync,
   readFileSync,
   writeFileSync,
+  renameSync,
 } from 'node:fs';
 import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { getTarballCachePath, getPlatformIdentifier } from './utils/path.js';
 
 export interface TarballBuildResult {
@@ -73,7 +74,7 @@ export class TarballBuilder {
 
       // Move tarball to cache
       const finalTarballPath = join(tarballCacheDir, 'package.tgz');
-      execSync(`mv "${tarballFile}" "${finalTarballPath}"`);
+      renameSync(tarballFile, finalTarballPath);
 
       // Calculate integrity hash
       const integrity = this.calculateIntegrity(finalTarballPath);
@@ -168,27 +169,65 @@ export class TarballBuilder {
       const cleanGitUrl = this.parseGitUrl(gitUrl);
 
       // Clone with depth 1 for efficiency, then checkout specific commit
-      execSync(`git clone --depth 1 "${cleanGitUrl}" "${targetDir}"`, {
-        stdio: 'pipe',
-        encoding: 'utf8',
-      });
+      const cloneResult = spawnSync(
+        'git',
+        ['clone', '--depth', '1', cleanGitUrl, targetDir],
+        {
+          stdio: 'pipe',
+          encoding: 'utf8',
+        }
+      );
+
+      if (cloneResult.status !== 0) {
+        throw new Error(
+          `git clone failed with exit code ${cloneResult.status}: ${cloneResult.stderr}`
+        );
+      }
 
       // Fetch the specific commit if not already available
       try {
-        execSync(`git -C "${targetDir}" cat-file -e ${commitSha}`, {
-          stdio: 'pipe',
-        });
+        const catResult = spawnSync(
+          'git',
+          ['-C', targetDir, 'cat-file', '-e', commitSha],
+          {
+            stdio: 'pipe',
+          }
+        );
+
+        if (catResult.status !== 0) {
+          throw new Error('Commit not found');
+        }
       } catch {
         // Commit not found, need to fetch more history
-        execSync(`git -C "${targetDir}" fetch --unshallow`, {
-          stdio: 'pipe',
-        });
+        const fetchResult = spawnSync(
+          'git',
+          ['-C', targetDir, 'fetch', '--unshallow'],
+          {
+            stdio: 'pipe',
+          }
+        );
+
+        if (fetchResult.status !== 0) {
+          throw new Error(
+            `git fetch --unshallow failed with exit code ${fetchResult.status}`
+          );
+        }
       }
 
       // Checkout the specific commit
-      execSync(`git -C "${targetDir}" checkout ${commitSha}`, {
-        stdio: 'pipe',
-      });
+      const checkoutResult = spawnSync(
+        'git',
+        ['-C', targetDir, 'checkout', commitSha],
+        {
+          stdio: 'pipe',
+        }
+      );
+
+      if (checkoutResult.status !== 0) {
+        throw new Error(
+          `git checkout failed with exit code ${checkoutResult.status}: ${checkoutResult.stderr}`
+        );
+      }
     } catch (error) {
       throw new Error(
         `Failed to checkout commit ${commitSha}: ${String(error)}`
@@ -215,30 +254,40 @@ export class TarballBuilder {
       // Install dependencies
       // Try npm ci first (preferred for lockfile-based installs)
       try {
-        const ciCmd = options.skipBuildScripts
-          ? 'npm ci --ignore-scripts'
-          : 'npm ci';
+        const ciArgs = options.skipBuildScripts
+          ? ['ci', '--ignore-scripts']
+          : ['ci'];
 
-        console.log(`  Running: ${ciCmd}`);
-        execSync(ciCmd, {
+        console.log(`  Running: npm ${ciArgs.join(' ')}`);
+        const result = spawnSync('npm', ciArgs, {
           cwd: workingDir,
           stdio: 'pipe',
           encoding: 'utf8',
         });
+
+        if (result.status !== 0) {
+          throw new Error(`npm ci failed with exit code ${result.status}`);
+        }
       } catch {
         // If npm ci fails, try npm install as fallback
         console.log('  npm ci failed, falling back to npm install...');
         try {
-          const installCmd = options.skipBuildScripts
-            ? 'npm install --ignore-scripts'
-            : 'npm install';
+          const installArgs = options.skipBuildScripts
+            ? ['install', '--ignore-scripts']
+            : ['install'];
 
-          console.log(`  Running: ${installCmd}`);
-          execSync(installCmd, {
+          console.log(`  Running: npm ${installArgs.join(' ')}`);
+          const result = spawnSync('npm', installArgs, {
             cwd: workingDir,
             stdio: 'pipe',
             encoding: 'utf8',
           });
+
+          if (result.status !== 0) {
+            throw new Error(
+              `npm install failed with exit code ${result.status}`
+            );
+          }
         } catch (installError) {
           throw new Error(
             `Both npm ci and npm install failed: ${String(installError)}`
@@ -255,21 +304,33 @@ export class TarballBuilder {
 
         if (packageJson.scripts?.prepare) {
           console.log('  Running: npm run prepare');
-          execSync('npm run prepare', {
+          const result = spawnSync('npm', ['run', 'prepare'], {
             cwd: workingDir,
             stdio: 'pipe',
             encoding: 'utf8',
           });
+
+          if (result.status !== 0) {
+            throw new Error(
+              `npm run prepare failed with exit code ${result.status}`
+            );
+          }
         }
       }
 
       // Create tarball
       console.log('  Running: npm pack');
-      const packOutput = execSync('npm pack', {
+      const packResult = spawnSync('npm', ['pack'], {
         cwd: workingDir,
         stdio: 'pipe',
         encoding: 'utf8',
-      }).trim();
+      });
+
+      if (packResult.status !== 0) {
+        throw new Error(`npm pack failed with exit code ${packResult.status}`);
+      }
+
+      const packOutput = packResult.stdout.trim();
 
       const tarballFile = join(
         workingDir,
@@ -288,10 +349,17 @@ export class TarballBuilder {
 
   private calculateIntegrity(tarballPath: string): string {
     try {
-      const output = execSync(`shasum -a 256 "${tarballPath}"`, {
+      const result = spawnSync('shasum', ['-a', '256', tarballPath], {
         encoding: 'utf8',
       });
-      const hash = output.split(' ')[0];
+
+      if (result.status !== 0) {
+        throw new Error(
+          `shasum failed with exit code ${result.status}: ${result.stderr}`
+        );
+      }
+
+      const hash = result.stdout.split(' ')[0];
       return `sha256-${Buffer.from(hash, 'hex').toString('base64')}`;
     } catch (error) {
       throw new Error(`Failed to calculate integrity: ${String(error)}`);

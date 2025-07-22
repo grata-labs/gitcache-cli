@@ -21,6 +21,7 @@ vi.mock('../../lib/utils/path.js', () => ({
 // Mock node:child_process
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
 const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
@@ -29,7 +30,7 @@ describe('TarballBuilder', () => {
   let builder: TarballBuilder;
   let tempTestDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     builder = createTarballBuilder();
 
@@ -41,6 +42,73 @@ describe('TarballBuilder', () => {
     mockGetTarballCachePath.mockImplementation(
       (sha: string, platform?: string) =>
         join(tempTestDir, 'tarballs', `${sha}-${platform || 'darwin-arm64'}`)
+    );
+
+    // Set up default successful spawnSync behavior (can be overridden in individual tests)
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
+
+    let mockWorkingDir = '';
+
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[], _options?: unknown) => {
+        const argsArray = args || [];
+
+        if (command === 'git' && argsArray[0] === 'clone') {
+          // Simulate git clone success - find target directory
+          const targetDir = argsArray[argsArray.length - 1];
+          mockWorkingDir = targetDir;
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
+        }
+
+        if (command === 'npm' && argsArray.includes('pack')) {
+          // Create the tarball file in the working directory
+          const tarballName = 'test-package-1.0.0.tgz';
+          const tarballPath = join(mockWorkingDir, tarballName);
+          writeFileSync(tarballPath, 'fake tarball content');
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: `${tarballName}\n`,
+            stderr: '',
+          };
+        }
+
+        if (command === 'shasum') {
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: 'abc123hash  filename\n',
+            stderr: '',
+          };
+        }
+
+        // Default success response for all other commands
+        return {
+          status: 0,
+          signal: null,
+          output: [],
+          pid: 123,
+          stdout: '',
+          stderr: '',
+        };
+      }
     );
   });
 
@@ -171,54 +239,109 @@ describe('TarballBuilder', () => {
     });
 
     it('should build new tarball when force is true', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
       let mockWorkingDir = '';
 
-      // Mock execSync to use our temp directory for build
-      mockExecSync.mockImplementation(
-        (cmd: string, _options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string' && cmd.includes('git clone')) {
-            // Simulate successful clone by creating the directory
-            const match = cmd.match(/"([^"]+)"$/);
-            if (match) {
-              const targetDir = match[1];
-              mockWorkingDir = targetDir;
-              mkdirSync(targetDir, { recursive: true });
-              writeFileSync(
-                join(targetDir, 'package.json'),
-                JSON.stringify({ name: 'test-package', version: '1.0.0' })
-              );
-            }
-            return '';
+      // Mock spawnSync to handle different commands
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          const argsArray = args || [];
+
+          if (command === 'git' && argsArray[0] === 'clone') {
+            // Simulate git clone success - find target directory
+            const targetDir = argsArray[argsArray.length - 1];
+            mockWorkingDir = targetDir;
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({ name: 'test-package', version: '1.0.0' })
+            );
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+
+          if (command === 'git' && argsArray.includes('cat-file')) {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
+          }
+
+          if (command === 'git' && argsArray.includes('checkout')) {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
+          }
+
+          if (
+            command === 'npm' &&
+            (argsArray.includes('ci') || argsArray.includes('install'))
+          ) {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
+          }
+
+          if (command === 'npm' && argsArray.includes('pack')) {
             // Create the tarball file in the working directory
             const tarballName = 'test-package-1.0.0.tgz';
             const tarballPath = join(mockWorkingDir, tarballName);
             writeFileSync(tarballPath, 'fake tarball content');
-            return `${tarballName}\n`;
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: `${tarballName}\n`,
+              stderr: '',
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('shasum')) {
-            return 'abc123hash  filename\n';
+
+          if (command === 'shasum') {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: 'abc123hash  filename\n',
+              stderr: '',
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('git cat-file')) {
-            return '';
-          }
-          if (typeof cmd === 'string' && cmd.includes('git checkout')) {
-            return '';
-          }
-          if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-            return '';
-          }
-          if (typeof cmd === 'string' && cmd.includes('mv')) {
-            return '';
-          }
-          return '';
+
+          // Default success response
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
       );
 
@@ -233,60 +356,95 @@ describe('TarballBuilder', () => {
     });
 
     it('should handle git clone failures', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
       // Mock git clone to fail
-      mockExecSync.mockImplementation(
-        (cmd: string, _options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string' && cmd.includes('git clone')) {
-            throw new Error('Git clone failed');
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[]) => {
+          if (command === 'git' && args?.[0] === 'clone') {
+            return {
+              status: 1,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: 'Git clone failed',
+            };
           }
-          return '';
+          // Default success for other commands
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: 'success',
+            stderr: '',
+          };
         }
       );
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
       ).rejects.toThrow(
-        'Failed to checkout commit abc123: Error: Git clone failed'
+        'Failed to checkout commit abc123: Error: git clone failed with exit code 1: Git clone failed'
       );
     });
 
     it('should handle npm install failures', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
       // Mock git operations to succeed, npm operations to fail
-      mockExecSync.mockImplementation(
-        (cmd: string, _options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string') {
-            if (cmd.includes('git clone')) {
-              const match = cmd.match(/"([^"]+)"$/);
-              if (match) {
-                const targetDir = match[1];
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[]) => {
+          if (command === 'git') {
+            if (args?.[0] === 'clone') {
+              const targetDir = args[args.length - 1];
+              if (targetDir) {
                 mkdirSync(targetDir, { recursive: true });
                 writeFileSync(
                   join(targetDir, 'package.json'),
                   JSON.stringify({ name: 'test-package', version: '1.0.0' })
                 );
               }
-              return '';
             }
-            if (cmd.includes('git cat-file') || cmd.includes('git checkout')) {
-              return '';
-            }
-            if (cmd.includes('npm ci') || cmd.includes('npm install')) {
-              throw new Error('npm install failed');
-            }
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
           }
-          return '';
+          if (
+            command === 'npm' &&
+            (args?.[0] === 'ci' || args?.[0] === 'install')
+          ) {
+            return {
+              status: 1,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: 'npm install failed',
+            };
+          }
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: 'success',
+            stderr: '',
+          };
         }
       );
 
@@ -296,57 +454,91 @@ describe('TarballBuilder', () => {
     });
 
     it('should run prepare script when not skipping build scripts', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
       const prepareScriptRan = vi.fn();
 
-      mockExecSync.mockImplementation(
-        (cmd: string, options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string') {
-            if (cmd.includes('git clone')) {
-              const match = cmd.match(/"([^"]+)"$/);
-              if (match) {
-                const targetDir = match[1];
-                mkdirSync(targetDir, { recursive: true });
-                writeFileSync(
-                  join(targetDir, 'package.json'),
-                  JSON.stringify({
-                    name: 'test-package',
-                    version: '1.0.0',
-                    scripts: { prepare: 'echo "prepare ran"' },
-                  })
-                );
-              }
-              return '';
-            }
-            if (cmd.includes('git cat-file') || cmd.includes('git checkout')) {
-              return '';
-            }
-            if (cmd.includes('npm ci')) {
-              return '';
-            }
-            if (cmd.includes('npm run prepare')) {
-              prepareScriptRan();
-              return '';
-            }
-            if (cmd.includes('npm pack')) {
-              writeFileSync(
-                join(
-                  (options?.cwd as string) || tempTestDir,
-                  'test-package-1.0.0.tgz'
-                ),
-                'tarball'
-              );
-              return 'test-package-1.0.0.tgz\n';
-            }
-            if (cmd.includes('shasum')) {
-              return 'hash  filename\n';
-            }
+      let mockWorkingDir = '';
+
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          const argsArray = args || [];
+
+          if (command === 'git' && argsArray[0] === 'clone') {
+            const targetDir = argsArray[argsArray.length - 1];
+            mockWorkingDir = targetDir;
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({
+                name: 'test-package',
+                version: '1.0.0',
+                scripts: { prepare: 'echo "prepare ran"' },
+              })
+            );
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
           }
-          return '';
+
+          if (
+            command === 'npm' &&
+            argsArray.includes('run') &&
+            argsArray.includes('prepare')
+          ) {
+            prepareScriptRan();
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
+          }
+
+          if (command === 'npm' && argsArray.includes('pack')) {
+            const tarballName = 'test-package-1.0.0.tgz';
+            const tarballPath = join(mockWorkingDir, tarballName);
+            writeFileSync(tarballPath, 'fake tarball content');
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: `${tarballName}\n`,
+              stderr: '',
+            };
+          }
+
+          if (command === 'shasum') {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: 'hash  filename\n',
+              stderr: '',
+            };
+          }
+
+          // Default success for other commands
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
       );
 
@@ -356,48 +548,88 @@ describe('TarballBuilder', () => {
     });
 
     it('should skip build scripts when skipBuildScripts is true', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
-      mockExecSync.mockImplementation(
-        (cmd: string, options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string') {
-            if (cmd.includes('git clone')) {
-              const match = cmd.match(/"([^"]+)"$/);
-              if (match) {
-                const targetDir = match[1];
-                mkdirSync(targetDir, { recursive: true });
-                writeFileSync(
-                  join(targetDir, 'package.json'),
-                  JSON.stringify({ name: 'test-package', version: '1.0.0' })
-                );
-              }
-              return '';
-            }
-            if (cmd.includes('git cat-file') || cmd.includes('git checkout')) {
-              return '';
-            }
-            if (cmd.includes('npm ci --ignore-scripts')) {
-              return '';
-            }
-            if (cmd.includes('npm pack')) {
-              writeFileSync(
-                join(
-                  (options?.cwd as string) || tempTestDir,
-                  'test-package-1.0.0.tgz'
-                ),
-                'tarball'
-              );
-              return 'test-package-1.0.0.tgz\n';
-            }
-            if (cmd.includes('shasum')) {
-              return 'hash  filename\n';
-            }
+      let mockWorkingDir = '';
+      let ignoreScriptsCalled = false;
+
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          const argsArray = args || [];
+
+          if (command === 'git' && argsArray[0] === 'clone') {
+            const targetDir = argsArray[argsArray.length - 1];
+            mockWorkingDir = targetDir;
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({ name: 'test-package', version: '1.0.0' })
+            );
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
           }
-          return '';
+
+          if (
+            command === 'npm' &&
+            (argsArray.includes('ci') || argsArray.includes('install'))
+          ) {
+            if (argsArray.includes('--ignore-scripts')) {
+              ignoreScriptsCalled = true;
+            }
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
+          }
+
+          if (command === 'npm' && argsArray.includes('pack')) {
+            const tarballName = 'test-package-1.0.0.tgz';
+            const tarballPath = join(mockWorkingDir, tarballName);
+            writeFileSync(tarballPath, 'fake tarball content');
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: `${tarballName}\n`,
+              stderr: '',
+            };
+          }
+
+          if (command === 'shasum') {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: 'hash  filename\n',
+              stderr: '',
+            };
+          }
+
+          // Default success for other commands
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
       );
 
@@ -407,10 +639,7 @@ describe('TarballBuilder', () => {
       });
 
       // Verify --ignore-scripts was used
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('npm ci --ignore-scripts'),
-        expect.any(Object)
-      );
+      expect(ignoreScriptsCalled).toBe(true);
     });
   });
 
@@ -466,106 +695,142 @@ describe('TarballBuilder', () => {
   });
 
   it('should handle shasum calculation errors', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
 
     let mockWorkingDir = '';
 
-    // Mock execSync to succeed until shasum, then fail
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mockWorkingDir = targetDir;
-            mkdirSync(targetDir, { recursive: true });
-            writeFileSync(
-              join(targetDir, 'package.json'),
-              JSON.stringify({ name: 'test-package', version: '1.0.0' })
-            );
-          }
-          return '';
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[]) => {
+        const argsArray = args || [];
+
+        if (command === 'git' && argsArray[0] === 'clone') {
+          const targetDir = argsArray[argsArray.length - 1];
+          mockWorkingDir = targetDir;
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+
+        if (command === 'npm' && argsArray.includes('pack')) {
           const tarballName = 'test-package-1.0.0.tgz';
           const tarballPath = join(mockWorkingDir, tarballName);
           writeFileSync(tarballPath, 'fake tarball content');
-          return `${tarballName}\n`;
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: `${tarballName}\n`,
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('shasum')) {
-          throw new Error('shasum command failed');
+
+        if (command === 'shasum') {
+          return {
+            status: 1,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: 'shasum command failed',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git cat-file')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('git checkout')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('mv')) {
-          return '';
-        }
-        return '';
+
+        // Default success for other commands
+        return {
+          status: 0,
+          signal: null,
+          output: [],
+          pid: 123,
+          stdout: '',
+          stderr: '',
+        };
       }
     );
 
     await expect(
       builder.buildTarball(gitUrl, commitSha, { force: true })
     ).rejects.toThrow(
-      'Failed to calculate integrity: Error: shasum command failed'
+      'Failed to calculate integrity: Error: shasum failed with exit code 1: shasum command failed'
     );
   });
 
   it('should handle package without package.json', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
 
     let mockWorkingDir = '';
 
-    // Mock execSync - don't create package.json
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mockWorkingDir = targetDir;
-            mkdirSync(targetDir, { recursive: true });
-            // No package.json created
-          }
-          return '';
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[]) => {
+        const argsArray = args || [];
+
+        if (command === 'git' && argsArray[0] === 'clone') {
+          const targetDir = argsArray[argsArray.length - 1];
+          mockWorkingDir = targetDir;
+          mkdirSync(targetDir, { recursive: true });
+          // No package.json created
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+
+        if (command === 'npm' && argsArray.includes('pack')) {
           const tarballName = 'package.tgz';
           const tarballPath = join(mockWorkingDir, tarballName);
           writeFileSync(tarballPath, 'fake tarball content');
-          return `${tarballName}\n`;
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: `${tarballName}\n`,
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('shasum')) {
-          return 'abc123hash  filename\n';
+
+        if (command === 'shasum') {
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: 'abc123hash  filename\n',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git cat-file')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('git checkout')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('mv')) {
-          return '';
-        }
-        return '';
+
+        // Default success for other commands
+        return {
+          status: 0,
+          signal: null,
+          output: [],
+          pid: 123,
+          stdout: '',
+          stderr: '',
+        };
       }
     );
 
@@ -578,40 +843,55 @@ describe('TarballBuilder', () => {
   });
 
   it('handles missing tarball file after npm pack', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
 
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mkdirSync(targetDir, { recursive: true });
-            writeFileSync(
-              join(targetDir, 'package.json'),
-              JSON.stringify({ name: 'test-package', version: '1.0.0' })
-            );
-          }
-          return '';
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[]) => {
+        const argsArray = args || [];
+
+        if (command === 'git' && argsArray[0] === 'clone') {
+          const targetDir = argsArray[argsArray.length - 1];
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+
+        if (command === 'npm' && argsArray.includes('pack')) {
           // Don't create the tarball file - this simulates the error case
-          return 'test-package-1.0.0.tgz\n';
+          // npm pack says it created a file but the file doesn't actually exist
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: 'test-package-1.0.0.tgz\n',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git cat-file')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('git checkout')) {
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-          return '';
-        }
-        return '';
+
+        // Default success for other commands
+        return {
+          status: 0,
+          signal: null,
+          output: [],
+          pid: 123,
+          stdout: '',
+          stderr: '',
+        };
       }
     );
 
@@ -621,58 +901,122 @@ describe('TarballBuilder', () => {
   });
 
   it('handles shasum calculation failure', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
 
     let mockWorkingDir = '';
 
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mockWorkingDir = targetDir;
-            mkdirSync(targetDir, { recursive: true });
-            writeFileSync(
-              join(targetDir, 'package.json'),
-              JSON.stringify({ name: 'test-package', version: '1.0.0' })
-            );
-          }
-          return '';
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[], _options?: unknown) => {
+        if (command === 'git' && args?.[0] === 'clone') {
+          const targetDir = args[args.length - 1];
+          mockWorkingDir = targetDir;
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+        if (command === 'npm' && args?.[0] === 'pack') {
           const tarballName = 'test-package-1.0.0.tgz';
           const tarballPath = join(mockWorkingDir, tarballName);
           writeFileSync(tarballPath, 'fake tarball content');
-          return `${tarballName}\n`;
+          return {
+            status: 0,
+            stdout: `${tarballName}\n`,
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', `${tarballName}\n`, ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('shasum')) {
-          throw new Error('shasum calculation failed');
+        if (command === 'shasum') {
+          return {
+            status: 1,
+            stdout: '',
+            stderr: 'shasum calculation failed',
+            error: new Error('shasum calculation failed'),
+            pid: 123,
+            output: ['', '', 'shasum calculation failed'],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git cat-file')) {
-          return '';
+        if (command === 'git' && args?.[0] === 'cat-file') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git checkout')) {
-          return '';
+        if (command === 'git' && args?.[0] === 'checkout') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-          return '';
+        if (
+          command === 'npm' &&
+          (args?.[0] === 'ci' || args?.[0] === 'install')
+        ) {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('mv')) {
-          return '';
+        if (command === 'mv') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        return '';
+        return {
+          status: 0,
+          stdout: '',
+          stderr: '',
+          error: undefined,
+          pid: 123,
+          output: ['', '', ''],
+          signal: null,
+        };
       }
     );
 
     await expect(
       builder.buildTarball(gitUrl, commitSha, { force: true })
     ).rejects.toThrow(
-      'Failed to calculate integrity: Error: shasum calculation failed'
+      'Failed to calculate integrity: Error: shasum failed with exit code 1: shasum calculation failed'
     );
   });
 
@@ -706,41 +1050,77 @@ describe('TarballBuilder', () => {
   });
 
   it('handles git checkout failure', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
 
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mkdirSync(targetDir, { recursive: true });
-          }
-          return '';
-        }
-        if (typeof cmd === 'string' && cmd.includes('git cat-file')) {
-          return ''; // Pretend commit exists
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[], _options?: unknown) => {
+        if (command === 'git' && args?.[0] === 'clone') {
+          const targetDir = args[args.length - 1];
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
         if (
-          typeof cmd === 'string' &&
-          cmd.includes('git') &&
-          cmd.includes('checkout')
+          command === 'git' &&
+          args?.[0] === '-C' &&
+          args?.[2] === 'cat-file'
         ) {
-          throw new Error('failed to checkout commit');
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        // Should not reach any other commands
-        return '';
+        if (
+          command === 'git' &&
+          args?.[0] === '-C' &&
+          args?.[2] === 'checkout'
+        ) {
+          return {
+            status: 1,
+            stdout: '',
+            stderr: 'failed to checkout commit',
+            error: new Error('failed to checkout commit'),
+            pid: 123,
+            output: ['', '', 'failed to checkout commit'],
+            signal: null,
+          };
+        }
+        return {
+          status: 0,
+          stdout: '',
+          stderr: '',
+          error: undefined,
+          pid: 123,
+          output: ['', '', ''],
+          signal: null,
+        };
       }
     );
 
     await expect(
       builder.buildTarball(gitUrl, commitSha, { force: true })
     ).rejects.toThrow(
-      'Failed to checkout commit abc123: Error: failed to checkout commit'
+      'Failed to checkout commit abc123: Error: git checkout failed with exit code 1: failed to checkout commit'
     );
   });
 
@@ -803,8 +1183,8 @@ describe('TarballBuilder', () => {
   });
 
   it('handles npm ci failure with fallback to npm install --ignore-scripts', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
@@ -812,50 +1192,120 @@ describe('TarballBuilder', () => {
     let mockWorkingDir = '';
     let installIgnoreScriptsCalled = false;
 
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mockWorkingDir = targetDir;
-            mkdirSync(targetDir, { recursive: true });
-            writeFileSync(
-              join(targetDir, 'package.json'),
-              JSON.stringify({ name: 'test-package', version: '1.0.0' })
-            );
-          }
-          return '';
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[], _options?: unknown) => {
+        if (command === 'git' && args?.[0] === 'clone') {
+          const targetDir = args[args.length - 1];
+          mockWorkingDir = targetDir;
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git cat-file')) {
-          return '';
+        if (command === 'git' && args?.[0] === 'cat-file') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git checkout')) {
-          return '';
+        if (command === 'git' && args?.[0] === 'checkout') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-          throw new Error('npm ci failed');
+        if (command === 'npm' && args?.[0] === 'ci') {
+          return {
+            status: 1,
+            stdout: '',
+            stderr: 'npm ci failed',
+            error: new Error('npm ci failed'),
+            pid: 123,
+            output: ['', '', 'npm ci failed'],
+            signal: null,
+          };
         }
         if (
-          typeof cmd === 'string' &&
-          cmd.includes('npm install --ignore-scripts')
+          command === 'npm' &&
+          args?.[0] === 'install' &&
+          args?.includes('--ignore-scripts')
         ) {
           installIgnoreScriptsCalled = true;
-          return '';
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+        if (command === 'npm' && args?.[0] === 'pack') {
           const tarballName = 'test-package-1.0.0.tgz';
           const tarballPath = join(mockWorkingDir, tarballName);
           writeFileSync(tarballPath, 'fake tarball content');
-          return `${tarballName}\n`;
+          return {
+            status: 0,
+            stdout: `${tarballName}\n`,
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', `${tarballName}\n`, ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('shasum')) {
-          return 'abc123hash  filename\n';
+        if (command === 'shasum') {
+          return {
+            status: 0,
+            stdout: 'abc123hash  filename\n',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', 'abc123hash  filename\n', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('mv')) {
-          return '';
+        if (command === 'mv') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        return '';
+        return {
+          status: 0,
+          stdout: '',
+          stderr: '',
+          error: undefined,
+          pid: 123,
+          output: ['', '', ''],
+          signal: null,
+        };
       }
     );
 
@@ -868,8 +1318,8 @@ describe('TarballBuilder', () => {
   });
 
   it('handles commit not found requiring fetch --unshallow', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
@@ -877,48 +1327,131 @@ describe('TarballBuilder', () => {
     let mockWorkingDir = '';
     let fetchUnshallowCalled = false;
 
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mockWorkingDir = targetDir;
-            mkdirSync(targetDir, { recursive: true });
-            writeFileSync(
-              join(targetDir, 'package.json'),
-              JSON.stringify({ name: 'test-package', version: '1.0.0' })
-            );
-          }
-          return '';
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[], _options?: unknown) => {
+        if (command === 'git' && args?.[0] === 'clone') {
+          const targetDir = args[args.length - 1];
+          mockWorkingDir = targetDir;
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('cat-file -e')) {
+        if (
+          command === 'git' &&
+          args?.[0] === '-C' &&
+          args?.[2] === 'cat-file' &&
+          args?.[3] === '-e'
+        ) {
           // Simulate commit not found in shallow clone
-          throw new Error('commit not found');
+          return {
+            status: 1,
+            stdout: '',
+            stderr: 'commit not found',
+            error: new Error('commit not found'),
+            pid: 123,
+            output: ['', '', 'commit not found'],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('fetch --unshallow')) {
+        if (
+          command === 'git' &&
+          args?.[0] === '-C' &&
+          args?.[2] === 'fetch' &&
+          args?.includes('--unshallow')
+        ) {
           fetchUnshallowCalled = true;
-          return '';
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('git checkout')) {
-          return '';
+        if (
+          command === 'git' &&
+          args?.[0] === '-C' &&
+          args?.[2] === 'checkout'
+        ) {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-          return '';
+        if (command === 'npm' && args?.[0] === 'ci') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+        if (command === 'npm' && args?.[0] === 'pack') {
           const tarballName = 'test-package-1.0.0.tgz';
           const tarballPath = join(mockWorkingDir, tarballName);
           writeFileSync(tarballPath, 'fake tarball content');
-          return `${tarballName}\n`;
+          return {
+            status: 0,
+            stdout: `${tarballName}\n`,
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', `${tarballName}\n`, ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('shasum')) {
-          return 'abc123hash  filename\n';
+        if (command === 'shasum') {
+          return {
+            status: 0,
+            stdout: 'abc123hash  filename\n',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', 'abc123hash  filename\n', ''],
+            signal: null,
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('mv')) {
-          return '';
+        if (command === 'mv') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
-        return '';
+        return {
+          status: 0,
+          stdout: '',
+          stderr: '',
+          error: undefined,
+          pid: 123,
+          output: ['', '', ''],
+          signal: null,
+        };
       }
     );
 
@@ -1037,147 +1570,291 @@ describe('TarballBuilder', () => {
 
   describe('Non-Error exception handling', () => {
     it('should handle non-Error exceptions in npm install', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
-      mockExecSync.mockImplementation(
-        (cmd: string, _options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string' && cmd.includes('git clone')) {
-            const match = cmd.match(/"([^"]+)"$/);
-            if (match) {
-              const targetDir = match[1];
-              mkdirSync(targetDir, { recursive: true });
-              writeFileSync(
-                join(targetDir, 'package.json'),
-                JSON.stringify({ name: 'test-package', version: '1.0.0' })
-              );
-            }
-            return '';
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          if (command === 'git' && args?.[0] === 'clone') {
+            const targetDir = args[args.length - 1];
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({ name: 'test-package', version: '1.0.0' })
+            );
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
           if (
-            (typeof cmd === 'string' && cmd.includes('git cat-file')) ||
-            cmd.includes('git checkout')
+            (command === 'git' && args?.[0] === 'cat-file') ||
+            (command === 'git' && args?.[0] === 'checkout')
           ) {
-            return '';
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-            // Throw a non-Error object for npm ci
-            throw { code: 'ENOTFOUND', errno: -3008 };
+          if (command === 'npm' && args?.[0] === 'ci') {
+            // Return failure status for npm ci
+            const error = new Error('npm ci failed');
+            (error as Error & { code: string; errno: number }).code =
+              'ENOTFOUND';
+            (error as Error & { code: string; errno: number }).errno = -3008;
+            return {
+              status: 1,
+              stdout: '',
+              stderr: '',
+              error,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('npm install')) {
-            // Throw a non-Error object for npm install fallback
-            throw 42; // Number instead of Error
+          if (command === 'npm' && args?.[0] === 'install') {
+            // Return failure status for npm install fallback
+            const error = new Error('npm install failed');
+            (error as Error & { code: number }).code = 42;
+            return {
+              status: 1,
+              stdout: '',
+              stderr: '',
+              error,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          return '';
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
       );
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
       ).rejects.toThrow(
-        'Failed to build package: Error: Both npm ci and npm install failed: 42'
+        'Failed to build package: Error: Both npm ci and npm install failed: Error: npm install failed with exit code 1'
       );
     });
 
     it('should handle non-Error exceptions in buildPackage', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
-      mockExecSync.mockImplementation(
-        (cmd: string, _options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string' && cmd.includes('git clone')) {
-            const match = cmd.match(/"([^"]+)"$/);
-            if (match) {
-              const targetDir = match[1];
-              mkdirSync(targetDir, { recursive: true });
-              writeFileSync(
-                join(targetDir, 'package.json'),
-                JSON.stringify({ name: 'test-package', version: '1.0.0' })
-              );
-            }
-            return '';
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          if (command === 'git' && args?.[0] === 'clone') {
+            const targetDir = args[args.length - 1];
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({ name: 'test-package', version: '1.0.0' })
+            );
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
           if (
-            (typeof cmd === 'string' && cmd.includes('git cat-file')) ||
-            cmd.includes('git checkout')
+            (command === 'git' && args?.[0] === 'cat-file') ||
+            (command === 'git' && args?.[0] === 'checkout')
           ) {
-            return '';
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-            return '';
+          if (command === 'npm' && args?.[0] === 'ci') {
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('npm pack')) {
-            // Throw a non-Error object in npm pack
-            throw null; // null instead of Error
+          if (command === 'npm' && args?.[0] === 'pack') {
+            // Return failure status for npm pack with special error handling
+            const error = new Error('npm pack failed');
+            (error as Error & { originalError: null }).originalError = null;
+            return {
+              status: 1,
+              stdout: '',
+              stderr: '',
+              error,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          return '';
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
       );
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
-      ).rejects.toThrow('Failed to build package: null');
+      ).rejects.toThrow(
+        'Failed to build package: Error: npm pack failed with exit code 1'
+      );
     });
 
     it('should handle non-Error exceptions in calculateIntegrity', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
       let mockWorkingDir = '';
 
-      mockExecSync.mockImplementation(
-        (cmd: string, _options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string' && cmd.includes('git clone')) {
-            const match = cmd.match(/"([^"]+)"$/);
-            if (match) {
-              const targetDir = match[1];
-              mockWorkingDir = targetDir;
-              mkdirSync(targetDir, { recursive: true });
-              writeFileSync(
-                join(targetDir, 'package.json'),
-                JSON.stringify({ name: 'test-package', version: '1.0.0' })
-              );
-            }
-            return '';
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          if (command === 'git' && args?.[0] === 'clone') {
+            const targetDir = args[args.length - 1];
+            mockWorkingDir = targetDir;
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({ name: 'test-package', version: '1.0.0' })
+            );
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
           if (
-            (typeof cmd === 'string' && cmd.includes('git cat-file')) ||
-            cmd.includes('git checkout')
+            (command === 'git' && args?.[0] === 'cat-file') ||
+            (command === 'git' && args?.[0] === 'checkout')
           ) {
-            return '';
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-            return '';
+          if (command === 'npm' && args?.[0] === 'ci') {
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+          if (command === 'npm' && args?.[0] === 'pack') {
             const tarballName = 'test-package-1.0.0.tgz';
             const tarballPath = join(mockWorkingDir, tarballName);
             writeFileSync(tarballPath, 'fake tarball content');
-            return `${tarballName}\n`;
+            return {
+              status: 0,
+              stdout: `${tarballName}\n`,
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', `${tarballName}\n`, ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('shasum')) {
-            // Throw a non-Error object in shasum
-            throw ['array', 'error'];
+          if (command === 'shasum') {
+            // Return failure status for shasum with special error handling
+            const error = new Error('shasum failed');
+            (error as Error & { originalError: string[] }).originalError = [
+              'array',
+              'error',
+            ];
+            return {
+              status: 1,
+              stdout: '',
+              stderr: '',
+              error,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('mv')) {
-            return '';
+          if (command === 'mv') {
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
           }
-          return '';
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
         }
       );
 
       await expect(
         builder.buildTarball(gitUrl, commitSha, { force: true })
-      ).rejects.toThrow('Failed to calculate integrity: array,error');
+      ).rejects.toThrow(
+        'Failed to calculate integrity: Error: shasum failed with exit code 1: '
+      );
     });
 
     it('should handle empty npm pack output', async () => {
@@ -1236,49 +1913,68 @@ describe('TarballBuilder', () => {
     });
 
     it('should handle missing package name and version in package.json', async () => {
-      const { execSync } = await import('node:child_process');
-      const mockExecSync = vi.mocked(execSync);
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
 
       const commitSha = 'abc123';
       const gitUrl = 'https://github.com/test/repo.git';
 
       let mockWorkingDir = '';
 
-      mockExecSync.mockImplementation(
-        (cmd: string, _options?: ExecSyncOptions) => {
-          if (typeof cmd === 'string' && cmd.includes('git clone')) {
-            const match = cmd.match(/"([^"]+)"$/);
-            if (match) {
-              const targetDir = match[1];
-              mockWorkingDir = targetDir;
-              mkdirSync(targetDir, { recursive: true });
-              // Create package.json without name and version to test fallbacks
-              writeFileSync(join(targetDir, 'package.json'), '{}');
-            }
-            return '';
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[]) => {
+          const argsArray = args || [];
+
+          if (command === 'git' && argsArray[0] === 'clone') {
+            const targetDir = argsArray[argsArray.length - 1];
+            mockWorkingDir = targetDir;
+            mkdirSync(targetDir, { recursive: true });
+            // Create package.json without name and version to test fallbacks
+            writeFileSync(join(targetDir, 'package.json'), '{}');
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
           }
-          if (
-            (typeof cmd === 'string' && cmd.includes('git cat-file')) ||
-            cmd.includes('git checkout')
-          ) {
-            return '';
-          }
-          if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-            return '';
-          }
-          if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+
+          if (command === 'npm' && argsArray.includes('pack')) {
             const tarballName = 'package.tgz';
             const tarballPath = join(mockWorkingDir, tarballName);
             writeFileSync(tarballPath, 'fake tarball content');
-            return `${tarballName}\n`;
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: `${tarballName}\n`,
+              stderr: '',
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('shasum')) {
-            return 'abc123hash  filename\n';
+
+          if (command === 'shasum') {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: 'abc123hash  filename\n',
+              stderr: '',
+            };
           }
-          if (typeof cmd === 'string' && cmd.includes('mv')) {
-            return '';
-          }
-          return '';
+
+          // Default success for other commands
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
       );
 
@@ -1352,6 +2048,191 @@ describe('TarballBuilder', () => {
     it('should create a TarballBuilder instance', () => {
       const builder = createTarballBuilder();
       expect(builder).toBeInstanceOf(TarballBuilder);
+    });
+
+    it('handles git fetch --unshallow failure', async () => {
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
+
+      const commitSha = 'abc123';
+      const gitUrl = 'https://github.com/test/repo.git';
+
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          if (command === 'git' && args?.[0] === 'clone') {
+            const targetDir = args[args.length - 1];
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({ name: 'test-package', version: '1.0.0' })
+            );
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
+          }
+          if (
+            command === 'git' &&
+            args?.[0] === '-C' &&
+            args?.[2] === 'cat-file' &&
+            args?.[3] === '-e'
+          ) {
+            // Simulate commit not found in shallow clone
+            return {
+              status: 1,
+              stdout: '',
+              stderr: 'commit not found',
+              error: new Error('commit not found'),
+              pid: 123,
+              output: ['', '', 'commit not found'],
+              signal: null,
+            };
+          }
+          if (
+            command === 'git' &&
+            args?.[0] === '-C' &&
+            args?.[2] === 'fetch' &&
+            args?.includes('--unshallow')
+          ) {
+            // Simulate fetch --unshallow failure
+            return {
+              status: 1,
+              stdout: '',
+              stderr: 'fetch failed',
+              error: new Error('fetch failed'),
+              pid: 123,
+              output: ['', '', 'fetch failed'],
+              signal: null,
+            };
+          }
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
+        }
+      );
+
+      await expect(
+        builder.buildTarball(gitUrl, commitSha, { force: true })
+      ).rejects.toThrow(
+        'Failed to checkout commit abc123: Error: git fetch --unshallow failed with exit code 1'
+      );
+    });
+
+    it('handles npm run prepare failure', async () => {
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
+
+      const commitSha = 'abc123';
+      const gitUrl = 'https://github.com/test/repo.git';
+
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          if (command === 'git' && args?.[0] === 'clone') {
+            const targetDir = args[args.length - 1];
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({
+                name: 'test-package',
+                version: '1.0.0',
+                scripts: { prepare: 'echo "prepare script"' },
+              })
+            );
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
+          }
+          if (
+            command === 'git' &&
+            args?.[0] === '-C' &&
+            args?.[2] === 'cat-file'
+          ) {
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
+          }
+          if (
+            command === 'git' &&
+            args?.[0] === '-C' &&
+            args?.[2] === 'checkout'
+          ) {
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
+          }
+          if (command === 'npm' && args?.[0] === 'ci') {
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+              error: undefined,
+              pid: 123,
+              output: ['', '', ''],
+              signal: null,
+            };
+          }
+          if (
+            command === 'npm' &&
+            args?.[0] === 'run' &&
+            args?.[1] === 'prepare'
+          ) {
+            // Simulate npm run prepare failure
+            return {
+              status: 1,
+              stdout: '',
+              stderr: 'prepare script failed',
+              error: new Error('prepare script failed'),
+              pid: 123,
+              output: ['', '', 'prepare script failed'],
+              signal: null,
+            };
+          }
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            error: undefined,
+            pid: 123,
+            output: ['', '', ''],
+            signal: null,
+          };
+        }
+      );
+
+      await expect(
+        builder.buildTarball(gitUrl, commitSha, { force: true })
+      ).rejects.toThrow(
+        'Failed to build package: Error: npm run prepare failed with exit code 1'
+      );
     });
   });
 });

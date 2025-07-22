@@ -11,6 +11,7 @@ import {
 // Mock execSync for git ls-remote calls
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
 // Mock log utilities
