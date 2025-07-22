@@ -7,6 +7,7 @@ import { scanLockfile, resolveGitReferences } from '../../lockfile/scan.js';
 // Mock execSync for git commands
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
 // Mock log utilities

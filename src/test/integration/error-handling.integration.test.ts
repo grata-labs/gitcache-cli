@@ -2,12 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ExecSyncOptions } from 'node:child_process';
 import { createTarballBuilder } from '../../lib/tarball-builder.js';
 
 // Mock node:child_process for specific tests
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
 describe('TarballBuilder Error Handling Integration', () => {
@@ -55,52 +55,99 @@ describe('TarballBuilder Error Handling Integration', () => {
   });
 
   it('should handle empty npm pack output (line 251)', async () => {
-    const { execSync } = await import('node:child_process');
-    const mockExecSync = vi.mocked(execSync);
+    const { spawnSync } = await import('node:child_process');
+    const mockSpawnSync = vi.mocked(spawnSync);
 
     const commitSha = 'abc123';
     const gitUrl = 'https://github.com/test/repo.git';
 
     let mockWorkingDir = '';
 
-    mockExecSync.mockImplementation(
-      (cmd: string, _options?: ExecSyncOptions) => {
-        if (typeof cmd === 'string' && cmd.includes('git clone')) {
-          const match = cmd.match(/"([^"]+)"$/);
-          if (match) {
-            const targetDir = match[1];
-            mockWorkingDir = targetDir;
-            mkdirSync(targetDir, { recursive: true });
-            writeFileSync(
-              join(targetDir, 'package.json'),
-              JSON.stringify({ name: 'test-package', version: '1.0.0' })
-            );
-          }
-          return '';
+    mockSpawnSync.mockImplementation(
+      (command: string, args?: readonly string[]) => {
+        const argsArray = args || [];
+
+        if (command === 'git' && argsArray[0] === 'clone') {
+          const targetDir = argsArray[argsArray.length - 1];
+          mockWorkingDir = targetDir;
+          mkdirSync(targetDir, { recursive: true });
+          writeFileSync(
+            join(targetDir, 'package.json'),
+            JSON.stringify({ name: 'test-package', version: '1.0.0' })
+          );
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
+
         if (
-          (typeof cmd === 'string' && cmd.includes('git cat-file')) ||
-          cmd.includes('git checkout')
+          command === 'git' &&
+          (argsArray.includes('cat-file') || argsArray.includes('checkout'))
         ) {
-          return '';
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm ci')) {
-          return '';
+
+        if (
+          command === 'npm' &&
+          (argsArray.includes('ci') || argsArray.includes('install'))
+        ) {
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('npm pack')) {
+
+        if (command === 'npm' && argsArray.includes('pack')) {
           // Create the fallback tarball name to test line 251: || 'package.tgz'
           const tarballPath = join(mockWorkingDir, 'package.tgz');
           writeFileSync(tarballPath, 'fake tarball content');
           // Return empty output to trigger .pop() returning undefined
-          return '\n\n\n'; // Just newlines, so .pop() will return undefined
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '\n\n\n', // Just newlines, so .pop() will return undefined
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('shasum')) {
-          return 'abc123hash  filename\n';
+
+        if (command === 'shasum') {
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: 'abc123hash  filename\n',
+            stderr: '',
+          };
         }
-        if (typeof cmd === 'string' && cmd.includes('mv')) {
-          return '';
-        }
-        return '';
+
+        // Default success for other commands like mv
+        return {
+          status: 0,
+          signal: null,
+          output: [],
+          pid: 123,
+          stdout: '',
+          stderr: '',
+        };
       }
     );
 

@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { logRefResolution } from './log.js';
 
 export interface GitCacheOptions {
@@ -15,25 +15,47 @@ export interface ResolvedRef {
  * Clone a Git repository as a mirror
  */
 export function cloneMirror(repoUrl: string, targetPath: string): void {
-  execSync(`git clone --mirror ${repoUrl} "${targetPath}"`, {
+  const result = spawnSync('git', ['clone', '--mirror', repoUrl, targetPath], {
     stdio: 'inherit',
   });
+
+  if (result.status !== 0) {
+    throw new Error(
+      `git clone --mirror failed with exit code ${result.status}`
+    );
+  }
 }
 
 /**
  * Update mirror repository and prune deleted branches
  */
 export function updateAndPruneMirror(targetPath: string): void {
-  execSync(`git -C "${targetPath}" remote update --prune`, {
-    stdio: 'inherit',
-  });
+  const result = spawnSync(
+    'git',
+    ['-C', targetPath, 'remote', 'update', '--prune'],
+    {
+      stdio: 'inherit',
+    }
+  );
+
+  if (result.status !== 0) {
+    throw new Error(
+      `git remote update --prune failed with exit code ${result.status}`
+    );
+  }
 }
 
 /**
  * Repack a Git repository for optimization
  */
 export function repackRepository(targetPath: string): void {
-  execSync(`git -C "${targetPath}" repack -ad`, { stdio: 'inherit' });
+  const result = spawnSync('git', ['-C', targetPath, 'repack', '-ad'], {
+    stdio: 'inherit',
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`git repack -ad failed with exit code ${result.status}`);
+  }
 }
 
 /**
@@ -41,11 +63,18 @@ export function repackRepository(targetPath: string): void {
  */
 export function resolveRef(repoUrl: string, ref: string): string {
   try {
-    const output = execSync(`git ls-remote ${repoUrl} ${ref}`, {
+    const result = spawnSync('git', ['ls-remote', repoUrl, ref], {
       encoding: 'utf8',
       stdio: 'pipe',
     });
 
+    if (result.status !== 0) {
+      throw new Error(
+        `git ls-remote failed with exit code ${result.status}: ${result.stderr}`
+      );
+    }
+
+    const output = result.stdout;
     const lines = output.trim().split('\n');
     if (lines.length === 0 || !lines[0]) {
       throw new Error(`Reference '${ref}' not found in repository ${repoUrl}`);
