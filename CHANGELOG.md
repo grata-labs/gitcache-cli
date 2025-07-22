@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/grata-labs/gitcache-cli/compare/v1.3.1...v1.3.2) (2025-07-22)
+
+
+### Bug Fixes
+
+* use spawnSync instead of execSync for cli ([513c4ef](https://github.com/grata-labs/gitcache-cli/commit/513c4ef62c1c11441fd0476d0dd828c3e39a2cb1))
+
 ## [1.3.1](https://github.com/grata-labs/gitcache-cli/compare/v1.3.0...v1.3.1) (2025-07-21)
 
 
