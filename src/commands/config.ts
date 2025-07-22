@@ -21,6 +21,7 @@ export class Config extends BaseCommand {
     '--set max-cache-size=10GB',
   ];
   static params = ['get', 'set', 'list'];
+  static argumentSpec = { type: 'none' } as const;
 
   async exec(args: string[], opts: ConfigOptions = {}): Promise<string> {
     if (opts.list) {

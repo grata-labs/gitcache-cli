@@ -28,6 +28,7 @@ export class Prepare extends BaseCommand {
     '--lockfile npm-shrinkwrap.json --force --verbose',
   ];
   static params = ['lockfile', 'force', 'verbose'];
+  static argumentSpec = { type: 'none' } as const;
 
   async exec(args: string[], opts: PrepareOptions = {}): Promise<void> {
     const lockfilePath = this.resolveLockfilePath(opts.lockfile);

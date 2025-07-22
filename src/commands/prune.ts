@@ -32,6 +32,7 @@ export class Prune extends BaseCommand {
     '--dry-run',
   ];
   static params = ['max-size', 'dry-run', 'set-default', 'verbose'];
+  static argumentSpec = { type: 'none' } as const;
 
   async exec(args: string[], opts: PruneCommandOptions = {}): Promise<string> {
     const dryRun = opts['dry-run'] || opts.dryRun || false;
