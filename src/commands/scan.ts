@@ -22,6 +22,7 @@ export class Scan extends BaseCommand {
     '--lockfile npm-shrinkwrap.json --json',
   ];
   static params = ['lockfile', 'json'];
+  static argumentSpec = { type: 'none' } as const;
 
   async exec(args: string[], opts: ScanOptions = {}): Promise<void> {
     const lockfilePath = this.resolveLockfilePath(opts.lockfile);

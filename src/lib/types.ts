@@ -3,6 +3,14 @@
  */
 
 /**
+ * Command argument type - defines how the command accepts arguments
+ */
+export type CommandArguments =
+  | { type: 'required'; name: string } // <repo>
+  | { type: 'variadic'; name: string } // [args...]
+  | { type: 'none' }; // no arguments
+
+/**
  * Command class interface
  */
 export interface CommandClass {
@@ -12,6 +20,7 @@ export interface CommandClass {
   description: string;
   commandName: string;
   params?: string[];
+  argumentSpec?: CommandArguments;
 }
 
 /**

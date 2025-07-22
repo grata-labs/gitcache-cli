@@ -24,6 +24,7 @@ export class Install extends BaseCommand {
   static commandName = 'install';
   static usage = ['[npm-args...]'];
   static params = [];
+  static argumentSpec = { type: 'variadic', name: 'args' } as const;
 
   async exec(args: string[] = []): Promise<void> {
     const cacheDir = getCacheDir();

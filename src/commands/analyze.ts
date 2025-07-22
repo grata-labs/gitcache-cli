@@ -59,6 +59,7 @@ export class Analyze extends BaseCommand {
     '--lockfile npm-shrinkwrap.json --verbose',
   ];
   static params = ['lockfile', 'verbose', 'json'];
+  static argumentSpec = { type: 'none' } as const;
 
   async exec(args: string[], opts: AnalyzeOptions = {}): Promise<void> {
     const lockfilePath = this.resolveLockfilePath(opts.lockfile);
@@ -433,12 +434,3 @@ export class Analyze extends BaseCommand {
     return join(process.cwd(), 'package-lock.json');
   }
 }
-
-// Static properties for command registration
-Analyze.description = 'Show detailed lockfile analysis and cache status';
-Analyze.commandName = 'analyze';
-Analyze.usage = [
-  '[options]                      Analyze current directory lockfile',
-  '[options] --lockfile <path>    Analyze specific lockfile',
-];
-Analyze.params = ['lockfile', 'verbose', 'json'];

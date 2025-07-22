@@ -1,11 +1,34 @@
 import { Command } from 'commander';
-import type { CommandConfig } from './types.js';
+import type { CommandConfig, CommandArguments } from './types.js';
+import { addParametersToCommand } from './parameter-options.js';
 
 /**
  * Check if verbose help is requested
  */
 function isVerboseHelp(): boolean {
   return process.argv.includes('--verbose');
+}
+
+/**
+ * Create a command pattern string based on argument specification
+ */
+function createCommandPattern(
+  name: string,
+  argumentSpec?: CommandArguments
+): string {
+  if (!argumentSpec || argumentSpec.type === 'none') {
+    return name;
+  }
+
+  if (argumentSpec.type === 'required') {
+    return `${name} <${argumentSpec.name}>`;
+  }
+
+  if (argumentSpec.type === 'variadic') {
+    return `${name} [${argumentSpec.name}...]`;
+  }
+
+  return name;
 }
 
 /**
@@ -16,117 +39,49 @@ function registerCommand(
   name: string,
   config: CommandConfig
 ): void {
-  // Handle install command differently (accepts variable arguments)
-  if (name === 'install') {
-    program
-      .command(`${name} [args...]`)
-      .description(config.description)
-      /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-      .action(async (args: string[] = []) => {
-        const instance = new config.command();
-        const result = instance.exec(args);
+  const argumentSpec = config.command.argumentSpec;
+  const pattern = createCommandPattern(name, argumentSpec);
 
-        // Handle both sync and async commands
-        result instanceof Promise ? await result : result;
-      });
-    /* c8 ignore end */
-  } else if (
-    name === 'scan' ||
-    name === 'prepare' ||
-    name === 'analyze' ||
-    name === 'config' ||
-    name === 'prune'
-  ) {
-    // Handle scan, prepare, analyze, config, and prune commands (no repo argument required)
-    const cmd = program.command(name).description(config.description);
+  const cmd = program.command(pattern).description(config.description);
 
-    // Add options based on the command's static params
-    if (config.command.params) {
-      config.command.params.forEach((param: string) => {
-        if (param === 'lockfile') {
-          cmd.option(
-            '-l, --lockfile <path>',
-            'path to lockfile (default: package-lock.json)'
-          );
-        } else if (param === 'json') {
-          cmd.option('--json', 'output in JSON format');
-        } else if (param === 'force') {
-          cmd.option('-f, --force', 'overwrite existing tarballs');
-        } else if (param === 'verbose') {
-          cmd.option('-v, --verbose', 'verbose output');
-        } else if (param === 'max-size') {
-          cmd.option('--max-size <size>', 'maximum cache size (default: 5GB)');
-        } else if (param === 'dry-run') {
-          cmd.option(
-            '--dry-run',
-            'preview what would be deleted without actually deleting'
-          );
-        } else if (param === 'set-default') {
-          cmd.option(
-            '--set-default',
-            'save the specified max-size as the new default'
-          );
-        } else if (param === 'get') {
-          cmd.option('--get <key>', 'get configuration value');
-        } else if (param === 'set') {
-          cmd.option('--set <key=value>', 'set configuration value');
-        } else if (param === 'list') {
-          cmd.option('--list', 'list all configuration values');
-        }
-      });
-    }
-
-    cmd
-      /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-      .action(async (opts: Record<string, unknown>) => {
-        const instance = new config.command();
-        const result = instance.exec([], opts);
-
-        // Handle both sync and async commands
-        const finalResult = result instanceof Promise ? await result : result;
-
-        if (finalResult !== undefined && finalResult !== null) {
-          console.log(finalResult);
-        }
-      });
-    /* c8 ignore end */
-  } else {
-    // Default command pattern for add/cache commands
-    const cmd = program
-      .command(`${name} <repo>`)
-      .description(config.description);
-
-    // Add options based on the command's static params
-    if (config.command.params) {
-      config.command.params.forEach((param: string) => {
-        if (param === 'force') {
-          cmd.option('-f, --force', 'overwrite existing mirror');
-        } else if (param === 'ref') {
-          cmd.option(
-            '-r, --ref <reference>',
-            'resolve git reference (tag/branch) to commit SHA'
-          );
-        } else if (param === 'build') {
-          cmd.option('-b, --build', 'build and cache npm tarball');
-        }
-      });
-    }
-
-    cmd
-      /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-      .action(async (repo: string, opts: Record<string, unknown>) => {
-        const instance = new config.command();
-        const result = instance.exec([repo], opts);
-
-        // Handle both sync and async commands
-        const finalResult = result instanceof Promise ? await result : result;
-
-        if (finalResult !== undefined && finalResult !== null) {
-          console.log(finalResult);
-        }
-      });
-    /* c8 ignore end */
+  // Add options based on the command's static params
+  if (config.command.params) {
+    addParametersToCommand(cmd, config.command.params);
   }
+
+  cmd
+    /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
+    .action(async (...args: unknown[]) => {
+      // Parse arguments based on command type
+      let commandArgs: string[] = [];
+      let opts: Record<string, unknown> = {};
+
+      if (!argumentSpec || argumentSpec.type === 'none') {
+        // No positional arguments - last argument is options
+        opts = (args[0] as Record<string, unknown>) || {};
+      } else if (argumentSpec.type === 'required') {
+        // Single required argument - first is the argument, second is options
+        const [requiredArg, options] = args;
+        commandArgs = [requiredArg as string];
+        opts = (options as Record<string, unknown>) || {};
+      } else if (argumentSpec.type === 'variadic') {
+        // Variadic arguments - first is array of args, second is options
+        const [variadicArgs, options] = args;
+        commandArgs = (variadicArgs as string[]) || [];
+        opts = (options as Record<string, unknown>) || {};
+      }
+
+      const instance = new config.command();
+      const result = instance.exec(commandArgs, opts);
+
+      // Handle both sync and async commands
+      const finalResult = result instanceof Promise ? await result : result;
+
+      if (finalResult !== undefined && finalResult !== null) {
+        console.log(finalResult);
+      }
+    });
+  /* c8 ignore end */
 }
 
 /**
@@ -139,66 +94,53 @@ function registerAliases(
   Object.entries(commands).forEach(([mainCommand, config]) => {
     if (config.aliases) {
       config.aliases.forEach((alias) => {
-        // Handle install aliases differently (accepts variable arguments)
-        if (mainCommand === 'install') {
-          program
-            .command(`${alias} [args...]`, { hidden: true })
-            .description(`Alias for '${mainCommand}' command`)
-            /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-            .action(async (args: string[] = []) => {
-              const instance = new config.command();
-              const result = instance.exec(args);
+        const argumentSpec = config.command.argumentSpec;
+        const pattern = createCommandPattern(alias, argumentSpec);
 
-              // Handle both sync and async commands
-              result instanceof Promise ? await result : result;
-            })
-            /* c8 ignore end */
-            .addHelpText(
-              'after',
-              `\nNote: This is an alias for 'gitcache ${mainCommand}'. Use 'gitcache ${mainCommand} --help' for full documentation.`
-            );
-        } else {
-          // Default alias pattern for add/cache commands
-          const aliasCmd = program
-            .command(`${alias} <repo>`, { hidden: true })
-            .description(`Alias for '${mainCommand}' command`);
+        const aliasCmd = program
+          .command(pattern, { hidden: true })
+          .description(`Alias for '${mainCommand}' command`);
 
-          // Add options based on the command's static params
-          if (config.command.params) {
-            config.command.params.forEach((param: string) => {
-              if (param === 'force') {
-                aliasCmd.option('-f, --force', 'overwrite existing mirror');
-              } else if (param === 'ref') {
-                aliasCmd.option(
-                  '-r, --ref <reference>',
-                  'resolve git reference (tag/branch) to commit SHA'
-                );
-              } else if (param === 'build') {
-                aliasCmd.option('-b, --build', 'build and cache npm tarball');
-              }
-            });
-          }
-
-          aliasCmd
-            /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
-            .action(async (repo: string, opts: Record<string, unknown>) => {
-              const instance = new config.command();
-              const result = instance.exec([repo], opts);
-
-              // Handle both sync and async commands
-              const finalResult =
-                result instanceof Promise ? await result : result;
-
-              if (finalResult !== undefined && finalResult !== null) {
-                console.log(finalResult);
-              }
-            })
-            /* c8 ignore end */
-            .addHelpText(
-              'after',
-              `\nNote: This is an alias for 'gitcache ${mainCommand}'. Use 'gitcache ${mainCommand} --help' for full documentation.`
-            );
+        // Add options based on the command's static params
+        if (config.command.params) {
+          addParametersToCommand(aliasCmd, config.command.params);
         }
+
+        aliasCmd
+          /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
+          .action(async (...args: unknown[]) => {
+            // Parse arguments based on command type (same logic as main commands)
+            let commandArgs: string[] = [];
+            let opts: Record<string, unknown> = {};
+
+            if (!argumentSpec || argumentSpec.type === 'none') {
+              opts = (args[0] as Record<string, unknown>) || {};
+            } else if (argumentSpec.type === 'required') {
+              const [requiredArg, options] = args;
+              commandArgs = [requiredArg as string];
+              opts = (options as Record<string, unknown>) || {};
+            } else if (argumentSpec.type === 'variadic') {
+              const [variadicArgs, options] = args;
+              commandArgs = (variadicArgs as string[]) || [];
+              opts = (options as Record<string, unknown>) || {};
+            }
+
+            const instance = new config.command();
+            const result = instance.exec(commandArgs, opts);
+
+            // Handle both sync and async commands
+            const finalResult =
+              result instanceof Promise ? await result : result;
+
+            if (finalResult !== undefined && finalResult !== null) {
+              console.log(finalResult);
+            }
+          })
+          /* c8 ignore end */
+          .addHelpText(
+            'after',
+            `\nNote: This is an alias for 'gitcache ${mainCommand}'. Use 'gitcache ${mainCommand} --help' for full documentation.`
+          );
       });
     }
   });

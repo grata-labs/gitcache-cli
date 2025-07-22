@@ -24,6 +24,7 @@ export class Add extends BaseCommand {
     '<repo> --build',
   ];
   static params = ['force', 'ref', 'build'];
+  static argumentSpec = { type: 'required', name: 'repo' } as const;
 
   async exec(args: string[], opts: AddOptions = {}): Promise<string> {
     if (args.length === 0) {
