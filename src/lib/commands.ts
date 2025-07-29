@@ -5,6 +5,7 @@ import { Install } from '../commands/install.js';
 import { Prepare } from '../commands/prepare.js';
 import { Prune } from '../commands/prune.js';
 import { Scan } from '../commands/scan.js';
+import { Setup } from '../commands/setup.js';
 import type { CommandConfig } from './types.js';
 
 /**
@@ -20,6 +21,10 @@ export const commands: Record<string, CommandConfig> = {
     command: Install,
     description: Install.description,
     aliases: ['i'],
+  },
+  setup: {
+    command: Setup,
+    description: Setup.description,
   },
   scan: {
     command: Scan,

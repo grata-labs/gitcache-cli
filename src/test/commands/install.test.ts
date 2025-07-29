@@ -353,7 +353,7 @@ describe('Install command', () => {
 
     // Mock tarball builder
     const mockBuildTarball = vi.fn().mockResolvedValue({});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     (mockTarballBuilder as any).mockImplementation(() => ({
       buildTarball: mockBuildTarball,
     }));
