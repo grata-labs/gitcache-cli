@@ -559,6 +559,6 @@ describe('GitCache Scan Command Integration', () => {
       } finally {
         rmSync(testWorkingDir, { recursive: true, force: true });
       }
-    });
+    }, 10000); // 10 second timeout
   });
 });

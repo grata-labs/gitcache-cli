@@ -62,6 +62,18 @@ export const PARAMETER_OPTIONS: Record<string, ParameterConfig> = {
     flags: '-b, --build',
     description: 'build and cache npm tarball',
   },
+  org: {
+    flags: '--org <organization>',
+    description: 'organization name for registry access',
+  },
+  ci: {
+    flags: '--ci',
+    description: 'configure for CI environment',
+  },
+  token: {
+    flags: '--token <token>',
+    description: 'CI token for authentication',
+  },
 };
 
 /**

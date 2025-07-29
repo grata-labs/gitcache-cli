@@ -358,7 +358,6 @@ describe('Add command', () => {
 
     mockCreateTarballBuilder.mockReturnValue({
       buildTarball: mockBuildTarball,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Mock existsSync to return false (no existing repo)
@@ -411,7 +410,6 @@ describe('Add command', () => {
 
     mockCreateTarballBuilder.mockReturnValue({
       buildTarball: mockBuildTarball,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Mock existsSync to return false (no existing repo)
@@ -461,7 +459,6 @@ describe('Add command', () => {
 
     mockCreateTarballBuilder.mockReturnValue({
       buildTarball: mockBuildTarball,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Mock existsSync to return false (no existing repo)
