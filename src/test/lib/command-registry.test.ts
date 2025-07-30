@@ -20,7 +20,7 @@ describe('command-registry', () => {
     vi.clearAllMocks();
   });
 
-  describe('createCommandPattern function (lines 15-28)', () => {
+  describe('createCommandPattern function', () => {
     it('should create command pattern for required argument type', () => {
       const mockCommandClass: CommandClass = class MockCommand {
         static argumentSpec: CommandArguments = {
@@ -126,7 +126,7 @@ describe('command-registry', () => {
     });
   });
 
-  describe('registerCommand function (lines 31-34)', () => {
+  describe('registerCommand function', () => {
     it('should register command with correct pattern and description', () => {
       const mockCommandClass: CommandClass = class MockCommand {
         static argumentSpec: CommandArguments = {

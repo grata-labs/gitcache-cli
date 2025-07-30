@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { addParametersToCommand } from '../../lib/parameter-options.js';
 
 describe('parameter-options', () => {
-  describe('addParametersToCommand function (lines 78-79)', () => {
+  describe('addParametersToCommand function', () => {
     it('should warn about unknown parameter keys', () => {
       const consoleWarnSpy = vi
         .spyOn(console, 'warn')

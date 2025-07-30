@@ -132,7 +132,7 @@ describe('TarballBuilder Metadata Error Handling Integration', () => {
     rmSync(cacheDir, { recursive: true, force: true });
   });
 
-  it('should handle missing metadata file (lines 302-303)', () => {
+  it('should handle missing metadata file', () => {
     const commitSha = 'test-missing-metadata-sha';
     const platform = getPlatformIdentifier();
 
@@ -141,10 +141,10 @@ describe('TarballBuilder Metadata Error Handling Integration', () => {
 
     const tarballPath = join(cacheDir, 'package.tgz');
 
-    // Only create tarball file, not metadata - this should hit lines 302-303
+    // Only create tarball file, not metadata - this should trigger early return
     writeFileSync(tarballPath, 'fake tarball content');
 
-    // This should trigger the early return null (lines 302-303)
+    // This should trigger the early return null for missing metadata
     const result = builder.getCachedTarball(commitSha, platform);
     expect(result).toBeNull();
 
@@ -152,7 +152,7 @@ describe('TarballBuilder Metadata Error Handling Integration', () => {
     rmSync(cacheDir, { recursive: true, force: true });
   });
 
-  it('should handle missing tarball file (lines 302-303)', () => {
+  it('should handle missing tarball file', () => {
     const commitSha = 'test-missing-tarball-sha';
     const platform = getPlatformIdentifier();
 
@@ -161,7 +161,7 @@ describe('TarballBuilder Metadata Error Handling Integration', () => {
 
     const metadataPath = join(cacheDir, 'metadata.json');
 
-    // Only create metadata file, not tarball - this should hit lines 302-303
+    // Only create metadata file, not tarball - this should trigger early return
     writeFileSync(
       metadataPath,
       JSON.stringify({
@@ -174,7 +174,7 @@ describe('TarballBuilder Metadata Error Handling Integration', () => {
       })
     );
 
-    // This should trigger the early return null (lines 302-303)
+    // This should trigger the early return null for missing tarball
     const result = builder.getCachedTarball(commitSha, platform);
     expect(result).toBeNull();
 
