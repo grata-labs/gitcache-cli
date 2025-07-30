@@ -267,16 +267,21 @@ export class Setup extends BaseCommand {
       let intercepting = true;
 
       // Override stdout.write to suppress echo
-      process.stdout.write = function (
+      process.stdout.write = ((
         chunk: string | Uint8Array,
         ...args: unknown[]
-      ): boolean {
+      ): boolean => {
         if (intercepting && typeof chunk === 'string') {
           // Don't write anything that looks like user input
           return true;
         }
-        return originalWrite.apply(process.stdout, [chunk, ...args]);
-      };
+        return (
+          originalWrite as (
+            chunk: string | Uint8Array,
+            ...args: unknown[]
+          ) => boolean
+        ).apply(process.stdout, [chunk, ...args]);
+      }) as typeof process.stdout.write;
 
       stdin.setRawMode(true);
       stdin.resume();
