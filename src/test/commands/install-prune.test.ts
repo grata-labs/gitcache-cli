@@ -137,7 +137,13 @@ describe('Install Cache Size Reporting', () => {
     await install.exec([]);
 
     expect(consoleSpy).toHaveBeenCalledWith('📊 Cache size: 1.0 GB');
-    expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('💡'));
+    // Check that prune advice is not shown (but allow cache setup messages)
+    expect(consoleSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Consider running: gitcache prune')
+    );
+    expect(consoleSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Run 'gitcache prune' to manage cache size")
+    );
   });
 
   it('should not fail install if cache size calculation fails', async () => {

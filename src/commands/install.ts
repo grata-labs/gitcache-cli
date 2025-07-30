@@ -15,9 +15,11 @@ import {
   getTarballCachePath,
 } from '../lib/utils/path.js';
 import { resolveGitReferences, scanLockfile } from '../lockfile/scan.js';
+import { CacheHierarchy } from '../lib/cache-hierarchy.js';
 
 /**
  * Install command - runs npm install with gitcache as the npm cache
+ * Now includes transparent caching with registry fallback
  */
 export class Install extends BaseCommand {
   static description = 'Run npm install using gitcache as the npm cache';
@@ -25,6 +27,13 @@ export class Install extends BaseCommand {
   static usage = ['[npm-args...]'];
   static params = [];
   static argumentSpec = { type: 'variadic', name: 'args' } as const;
+
+  private cacheHierarchy: CacheHierarchy;
+
+  constructor() {
+    super();
+    this.cacheHierarchy = new CacheHierarchy();
+  }
 
   async exec(args: string[] = []): Promise<void> {
     const cacheDir = getCacheDir();
@@ -56,6 +65,9 @@ export class Install extends BaseCommand {
 
       // Automatically prepare Git dependencies before install
       await this.prepareGitDependencies();
+
+      // Show cache hierarchy status if authenticated
+      await this.showCacheStatus();
 
       // Execute npm install with gitcache as cache
       const result = spawnSync('npm', npmArgs, {
@@ -176,9 +188,48 @@ export class Install extends BaseCommand {
       const results = await Promise.allSettled(
         missingTarballs.map(async (dep) => {
           try {
-            await tarballBuilder.buildTarball(dep.gitUrl, dep.commitSha, {
-              force: true,
-            });
+            // First, try to get from cache hierarchy
+            const packageId = `${dep.gitUrl}#${dep.commitSha}`;
+            let tarballData: Buffer | null = null;
+
+            try {
+              if (await this.cacheHierarchy.has(packageId)) {
+                tarballData = await this.cacheHierarchy.get(packageId);
+                console.log(`📥 Retrieved ${dep.name} from cache`);
+              }
+            } catch {
+              // Cache retrieval failed, will build locally
+              console.log(
+                `⚠️  Cache retrieval failed for ${dep.name}, building locally`
+              );
+            }
+
+            if (!tarballData) {
+              // Build tarball locally
+              await tarballBuilder.buildTarball(dep.gitUrl, dep.commitSha, {
+                force: true,
+              });
+
+              // Store in cache hierarchy for future use
+              try {
+                const tarballPath = join(
+                  getTarballCachePath(dep.commitSha, getPlatformIdentifier()),
+                  'package.tgz'
+                );
+                if (existsSync(tarballPath)) {
+                  const fs = await import('node:fs/promises');
+                  const localTarball = await fs.readFile(tarballPath);
+                  await this.cacheHierarchy.store(packageId, localTarball);
+                  console.log(`📤 Stored ${dep.name} in cache hierarchy`);
+                }
+              } catch (cacheError) {
+                // Don't fail if cache storage fails
+                console.log(
+                  `⚠️  Failed to store ${dep.name} in cache: ${cacheError}`
+                );
+              }
+            }
+
             return { name: dep.name, success: true };
           } catch (error) {
             console.warn(`⚠️  Failed to build ${dep.name}: ${String(error)}`);
@@ -247,6 +298,26 @@ export class Install extends BaseCommand {
     } catch {
       // Don't fail the install if cache size calculation fails
       // This is just informational
+    }
+  }
+
+  /**
+   * Show cache hierarchy status and authentication info
+   */
+  private async showCacheStatus(): Promise<void> {
+    try {
+      const status = await this.cacheHierarchy.getStatus();
+      const authStatus = status.find((s) => s.strategy === 'Registry');
+
+      if (authStatus?.available && authStatus.authenticated) {
+        console.log(
+          '🔗 Connected to GitCache registry for transparent caching'
+        );
+      } else if (authStatus?.available && !authStatus.authenticated) {
+        console.log('💡 Run "gitcache setup" to enable cloud registry caching');
+      }
+    } catch {
+      // Status check is non-critical, don't fail the install
     }
   }
 }

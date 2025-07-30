@@ -180,7 +180,7 @@ describe('GitCache Install Command Integration - Simple Tests', () => {
     try {
       process.chdir(tempDir);
       // This should skip git dependency preparation and just run npm install
-      // hitting the early return in prepareGitDependencies at lines 102-103
+      // hitting the early return in prepareGitDependencies when no Git dependencies
       await cmd.exec([]);
     } finally {
       process.chdir(originalCwd);

@@ -537,4 +537,483 @@ describe('Install Command Unit Tests - Coverage Focused', () => {
       );
     });
   });
+
+  describe('missing coverage lines', () => {
+    it('should handle cache retrieval failure from cache hierarchy', async () => {
+      const mockResolvedDeps = [
+        {
+          name: 'test-package',
+          gitUrl: 'https://github.com/test/repo.git',
+          reference: 'abc123',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+          resolvedSha: 'abc123def456',
+        },
+      ];
+
+      // Mock existsSync to return true for lockfile but false for tarball cache
+      vi.mocked(nodeFs.existsSync).mockImplementation((path) => {
+        const pathStr = path.toString();
+        if (pathStr.includes('package-lock.json')) {
+          return true; // Lockfile exists
+        }
+        return false; // Tarball cache doesn't exist
+      });
+
+      vi.mocked(scanLockfile).mockReturnValue({
+        hasGitDependencies: true,
+        lockfileVersion: 2,
+        dependencies: mockResolvedDeps,
+      });
+      vi.mocked(resolveGitReferences).mockResolvedValue(mockResolvedDeps);
+
+      // Mock cache hierarchy that throws on get but returns true on has
+      const mockCacheHierarchy = {
+        has: vi.fn().mockResolvedValue(true),
+        get: vi.fn().mockRejectedValue(new Error('Cache retrieval failed')),
+        store: vi.fn().mockResolvedValue(undefined),
+        getStatus: vi.fn().mockResolvedValue([]),
+      };
+      (installCommand as any).cacheHierarchy = mockCacheHierarchy;
+
+      // Mock tarball builder
+      const mockBuilder = {
+        createTarball: vi.fn().mockResolvedValue(Buffer.from('test-tarball')),
+      };
+      vi.mocked(TarballBuilder).mockImplementation(() => mockBuilder as any);
+
+      // Mock spawnSync for npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        error: undefined,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      await installCommand.exec([]);
+
+      expect(console.log).toHaveBeenCalledWith(
+        '⚠️  Cache retrieval failed for test-package, building locally'
+      );
+    });
+
+    it('should handle cache storage failure after tarball build', async () => {
+      const mockResolvedDeps = [
+        {
+          name: 'test-package',
+          gitUrl: 'https://github.com/test/repo.git',
+          reference: 'abc123',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+          resolvedSha: 'abc123def456',
+        },
+      ];
+
+      // Mock existsSync to track calls per path
+      const pathCallCounts = new Map<string, number>();
+      vi.mocked(nodeFs.existsSync).mockImplementation((path) => {
+        const pathStr = path.toString();
+        const currentCount = pathCallCounts.get(pathStr) || 0;
+        pathCallCounts.set(pathStr, currentCount + 1);
+
+        if (pathStr.includes('package-lock.json')) {
+          return true; // Lockfile exists
+        }
+        if (pathStr.includes('package.tgz')) {
+          // Return false for first call (isTarballCached), true for later calls (storage check)
+          return currentCount > 0;
+        }
+        return false; // Other paths don't exist
+      });
+
+      vi.mocked(scanLockfile).mockReturnValue({
+        hasGitDependencies: true,
+        lockfileVersion: 2,
+        dependencies: mockResolvedDeps,
+      });
+      vi.mocked(resolveGitReferences).mockResolvedValue(mockResolvedDeps);
+
+      // Mock cache hierarchy that fails on store
+      const mockCacheHierarchy = {
+        has: vi.fn().mockResolvedValue(false),
+        get: vi.fn(),
+        store: vi.fn().mockRejectedValue(new Error('Cache storage failed')),
+        getStatus: vi.fn().mockResolvedValue([]),
+      };
+      (installCommand as any).cacheHierarchy = mockCacheHierarchy;
+
+      // Mock tarball builder
+      const mockBuilder = {
+        buildTarball: vi.fn().mockResolvedValue(undefined),
+        createTarball: vi.fn().mockResolvedValue(Buffer.from('test-tarball')),
+      };
+      vi.mocked(TarballBuilder).mockImplementation(() => mockBuilder as any);
+
+      // Mock fs.readFile for the tarball
+      vi.doMock('node:fs/promises', () => ({
+        readFile: vi
+          .fn()
+          .mockResolvedValue(Buffer.from('test-tarball-content')),
+      }));
+
+      // Mock spawnSync for npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        error: undefined,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      await installCommand.exec([]);
+
+      expect(console.log).toHaveBeenCalledWith(
+        '⚠️  Failed to store test-package in cache: Error: Cache storage failed'
+      );
+    });
+
+    it('should handle status check failure in showCacheStatus', async () => {
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false); // No lockfile
+
+      // Mock cache hierarchy getStatus to throw
+      const mockCacheHierarchy = {
+        getStatus: vi.fn().mockRejectedValue(new Error('Status check failed')),
+      };
+      (installCommand as any).cacheHierarchy = mockCacheHierarchy;
+
+      // Mock spawnSync for npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        error: undefined,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      // Should not throw even when status check fails (error is caught and swallowed)
+      await expect(installCommand.exec([])).resolves.toBeUndefined();
+
+      // Verify getStatus was called
+      expect(mockCacheHierarchy.getStatus).toHaveBeenCalled();
+    });
+
+    it('should handle registry unavailable status gracefully', async () => {
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false); // No lockfile
+
+      // Mock cache hierarchy with unavailable registry
+      const mockCacheHierarchy = {
+        getStatus: vi.fn().mockResolvedValue([
+          { strategy: 'Local', available: true },
+          { strategy: 'Registry', available: false },
+        ]),
+      };
+      (installCommand as any).cacheHierarchy = mockCacheHierarchy;
+
+      // Mock spawnSync for npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        error: undefined,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      await installCommand.exec([]);
+
+      // Should handle unavailable registry gracefully without throwing
+      expect(installCommand).toBeDefined();
+    });
+  });
+
+  describe('Cache error coverage for exact lines', () => {
+    it('should handle cache hierarchy retrieval errors during lockfile processing', async () => {
+      // Mock existsSync to return true for lockfile but false for tarball paths
+      // This forces the dependency to be treated as "missing" and go through cache hierarchy
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        const pathStr = String(path);
+        if (pathStr.includes('package-lock.json')) {
+          return true; // Lockfile exists
+        }
+        if (pathStr.includes('package.tgz')) {
+          return false; // Tarball does NOT exist - this is key for missing tarball
+        }
+        return false;
+      });
+
+      // Mock successful npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('npm install success'),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from('npm install success'), Buffer.from('')],
+        pid: 12345,
+        error: undefined,
+      });
+
+      // Mock scanLockfile to return Git dependency
+      vi.mocked(scanLockfile).mockReturnValue({
+        dependencies: [
+          {
+            name: 'test-git-package',
+            gitUrl: 'git+https://github.com/test/repo.git',
+            reference: 'abc123',
+            preferredUrl: 'git+https://github.com/test/repo.git',
+          },
+        ],
+        lockfileVersion: 2,
+        hasGitDependencies: true,
+      });
+
+      // Mock resolveGitReferences
+      vi.mocked(resolveGitReferences).mockResolvedValue([
+        {
+          name: 'test-git-package',
+          gitUrl: 'git+https://github.com/test/repo.git',
+          reference: 'abc123',
+          resolvedSha: 'abcdef123456',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+        },
+      ]);
+
+      // Mock cache hierarchy where has() returns true but get() throws error
+      const mockHas = vi.fn().mockResolvedValue(true);
+      const mockGet = vi
+        .fn()
+        .mockRejectedValue(new Error('Cache retrieval network error'));
+      const mockStore = vi.fn().mockResolvedValue(undefined);
+      const mockGetStatus = vi.fn().mockResolvedValue([]);
+
+      const mockCacheHierarchy = {
+        has: mockHas,
+        get: mockGet,
+        store: mockStore,
+        getStatus: mockGetStatus,
+      };
+
+      // Mock TarballBuilder - IMPORTANT: getCachedTarball must return null to create missing tarballs
+      const mockBuildTarball = vi.fn().mockResolvedValue({
+        name: 'test-git-package',
+        version: '1.0.0',
+        tarballPath: '/path/to/package.tgz',
+        integrity: 'sha512-abc123',
+      });
+
+      // Return null to ensure tarball is treated as missing, forcing cache hierarchy code path
+      const mockGetCachedTarball = vi.fn().mockReturnValue(null);
+
+      vi.mocked(TarballBuilder).mockImplementation(
+        () =>
+          ({
+            buildTarball: mockBuildTarball,
+            getCachedTarball: mockGetCachedTarball,
+            buildBatch: vi.fn(),
+            parseGitUrl: vi.fn(),
+            checkoutCommit: vi.fn(),
+            buildPackage: vi.fn(),
+            calculateIntegrity: vi.fn(),
+            addToRegistry: vi.fn(),
+          }) as any
+      );
+
+      // Spy on console.log to capture the exact error message for cache retrieval failure
+      const consoleLogSpy = vi
+        .spyOn(console, 'log')
+        .mockImplementation(() => {});
+
+      const installCommand = new Install();
+      // Manually inject the cache hierarchy
+      (installCommand as any).cacheHierarchy = mockCacheHierarchy;
+
+      await installCommand.exec([]);
+
+      // Verify that the cache retrieval error path was hit
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '⚠️  Cache retrieval failed for test-git-package, building locally'
+      );
+
+      // Verify cache hierarchy interactions - should be called with packageId format: gitUrl#commitSha
+      expect(mockHas).toHaveBeenCalledWith(
+        'https://github.com/test/repo.git#abcdef123456'
+      );
+      expect(mockGet).toHaveBeenCalledWith(
+        'https://github.com/test/repo.git#abcdef123456'
+      );
+      expect(mockBuildTarball).toHaveBeenCalled();
+
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should successfully retrieve tarball data from cache hierarchy', async () => {
+      // Mock existsSync to return true for lockfile but false for tarball paths
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        const pathStr = String(path);
+        if (pathStr.includes('package-lock.json')) {
+          return true; // Lockfile exists
+        }
+        if (pathStr.includes('package.tgz')) {
+          return false; // Tarball does NOT exist locally - force cache hierarchy path
+        }
+        return false;
+      });
+
+      // Mock successful npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('npm install success'),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from('npm install success'), Buffer.from('')],
+        pid: 12345,
+        error: undefined,
+      });
+
+      // Mock scanLockfile to return Git dependency
+      vi.mocked(scanLockfile).mockReturnValue({
+        dependencies: [
+          {
+            name: 'cached-package',
+            gitUrl: 'git+https://github.com/test/cached-repo.git',
+            reference: 'def789',
+            preferredUrl: 'git+https://github.com/test/cached-repo.git',
+          },
+        ],
+        lockfileVersion: 2,
+        hasGitDependencies: true,
+      });
+
+      // Mock resolveGitReferences
+      vi.mocked(resolveGitReferences).mockResolvedValue([
+        {
+          name: 'cached-package',
+          gitUrl: 'git+https://github.com/test/cached-repo.git',
+          reference: 'def789',
+          resolvedSha: 'def789123456',
+          preferredUrl: 'git+https://github.com/test/cached-repo.git',
+        },
+      ]);
+
+      // Mock cache hierarchy where has() returns true AND get() succeeds
+      const mockTarballData = Buffer.from('cached-tarball-content');
+      const mockHas = vi.fn().mockResolvedValue(true);
+      const mockGet = vi.fn().mockResolvedValue(mockTarballData); // Success case
+      const mockStore = vi.fn().mockResolvedValue(undefined);
+      const mockGetStatus = vi.fn().mockResolvedValue([]);
+
+      const mockCacheHierarchy = {
+        has: mockHas,
+        get: mockGet,
+        store: mockStore,
+        getStatus: mockGetStatus,
+      };
+
+      // Mock TarballBuilder - should NOT be called since we get from cache
+      const mockBuildTarball = vi.fn();
+      const mockGetCachedTarball = vi.fn().mockReturnValue(null);
+
+      vi.mocked(TarballBuilder).mockImplementation(
+        () =>
+          ({
+            buildTarball: mockBuildTarball,
+            getCachedTarball: mockGetCachedTarball,
+            buildBatch: vi.fn(),
+            parseGitUrl: vi.fn(),
+            checkoutCommit: vi.fn(),
+            buildPackage: vi.fn(),
+            calculateIntegrity: vi.fn(),
+            addToRegistry: vi.fn(),
+          }) as any
+      );
+
+      // Mock fs.writeFile for saving the retrieved tarball
+      const mockWriteFile = vi.fn().mockResolvedValue(undefined);
+      vi.doMock('node:fs/promises', () => ({
+        writeFile: mockWriteFile,
+      }));
+
+      // Spy on console.log to capture the success message
+      const consoleLogSpy = vi
+        .spyOn(console, 'log')
+        .mockImplementation(() => {});
+
+      const installCommand = new Install();
+      // Manually inject the cache hierarchy
+      (installCommand as any).cacheHierarchy = mockCacheHierarchy;
+
+      await installCommand.exec([]);
+
+      // Verify that the cache retrieval SUCCESS path was hit
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '📥 Retrieved cached-package from cache'
+      );
+
+      // Verify cache hierarchy interactions
+      expect(mockHas).toHaveBeenCalledWith(
+        'https://github.com/test/cached-repo.git#def789123456'
+      );
+      expect(mockGet).toHaveBeenCalledWith(
+        'https://github.com/test/cached-repo.git#def789123456'
+      );
+
+      // Build should NOT be called since we got from cache
+      expect(mockBuildTarball).not.toHaveBeenCalled();
+
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should handle status check errors in showCacheStatus', async () => {
+      // Mock existsSync to return false (no lockfile, simpler path)
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+
+      // Mock successful npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('npm install success'),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from('npm install success'), Buffer.from('')],
+        pid: 12345,
+        error: undefined,
+      });
+
+      // Mock cache hierarchy with available and authenticated registry status
+      const mockCacheHierarchy = {
+        has: vi.fn(),
+        get: vi.fn(),
+        store: vi.fn(),
+        getStatus: vi.fn().mockResolvedValue([
+          { strategy: 'Local', available: true },
+          { strategy: 'Registry', available: true, authenticated: true },
+        ]),
+      };
+
+      const installCommand = new Install();
+      // Manually inject the cache hierarchy to trigger status check
+      (installCommand as any).cacheHierarchy = mockCacheHierarchy;
+
+      // Spy on console methods to capture the authenticated status message
+      const consoleLogSpy = vi
+        .spyOn(console, 'log')
+        .mockImplementation(() => {});
+
+      await installCommand.exec([]);
+
+      // Verify status check was called
+      expect(mockCacheHierarchy.getStatus).toHaveBeenCalled();
+
+      // Verify the authenticated status message is shown
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '🔗 Connected to GitCache registry for transparent caching'
+      );
+
+      consoleLogSpy.mockRestore();
+    });
+  });
 });

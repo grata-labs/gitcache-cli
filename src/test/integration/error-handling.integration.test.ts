@@ -54,7 +54,7 @@ describe('TarballBuilder Error Handling Integration', () => {
     ).rejects.toThrow();
   });
 
-  it('should handle empty npm pack output (line 251)', async () => {
+  it('should handle empty npm pack output', async () => {
     const { spawnSync } = await import('node:child_process');
     const mockSpawnSync = vi.mocked(spawnSync);
 
@@ -114,7 +114,7 @@ describe('TarballBuilder Error Handling Integration', () => {
         }
 
         if (command === 'npm' && argsArray.includes('pack')) {
-          // Create the fallback tarball name to test line 251: || 'package.tgz'
+          // Create the fallback tarball name to test fallback to 'package.tgz'
           const tarballPath = join(mockWorkingDir, 'package.tgz');
           writeFileSync(tarballPath, 'fake tarball content');
           // Return empty output to trigger .pop() returning undefined
