@@ -183,7 +183,6 @@ export class Setup extends BaseCommand {
 
   private async setupInteractive(org: string): Promise<string> {
     try {
-      console.log(`🔗 Setting up GitCache registry for organization: ${org}`);
       console.log('');
 
       // Get email
@@ -243,43 +242,81 @@ export class Setup extends BaseCommand {
   }
 
   private async getPasswordInput(): Promise<string> {
+    // If we're not in a TTY, just read from stdin normally
+    if (!process.stdin.isTTY) {
+      return new Promise((resolve) => {
+        let password = '';
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data', (chunk) => {
+          password += chunk;
+        });
+        process.stdin.on('end', () => {
+          resolve(password.trim());
+        });
+      });
+    }
+
+    // For TTY, use a different approach
     return new Promise((resolve, reject) => {
       let password = '';
-
       const stdin = process.stdin;
+      const stdout = process.stdout;
+
+      // Create a hook to intercept and suppress output
+      const originalWrite = process.stdout.write;
+      let intercepting = true;
+
+      // Override stdout.write to suppress echo
+      process.stdout.write = function (
+        chunk: string | Uint8Array,
+        ...args: unknown[]
+      ): boolean {
+        if (intercepting && typeof chunk === 'string') {
+          // Don't write anything that looks like user input
+          return true;
+        }
+        return originalWrite.apply(process.stdout, [chunk, ...args]);
+      };
+
       stdin.setRawMode(true);
       stdin.resume();
       stdin.setEncoding('utf8');
 
       const cleanup = () => {
+        intercepting = false;
+        process.stdout.write = originalWrite;
         stdin.setRawMode(false);
         stdin.pause();
         stdin.removeAllListeners('data');
       };
 
       stdin.on('data', (key: string) => {
-        switch (key) {
-          case '\n':
-          case '\r':
-          case '\r\n':
+        // Process each character in the input
+        for (let i = 0; i < key.length; i++) {
+          const char = key[i];
+          const code = char.charCodeAt(0);
+
+          if (code === 3) {
+            // Ctrl+C
             cleanup();
-            resolve(password);
-            break;
-          case '\u0003': // Ctrl+C
-            cleanup();
+            stdout.write('\n');
             reject(new Error('SIGINT'));
-            break;
-          case '\u007f': // Backspace
-          case '\b':
+            return;
+          } else if (code === 13 || code === 10) {
+            // Enter
+            cleanup();
+            stdout.write('\n');
+            resolve(password);
+            return;
+          } else if (code === 127 || code === 8) {
+            // Backspace
             if (password.length > 0) {
               password = password.slice(0, -1);
-              process.stdout.write('\b \b');
             }
-            break;
-          default:
-            password += key;
-            process.stdout.write('*');
-            break;
+          } else if (code >= 32 && code <= 126) {
+            // Printable characters
+            password += char;
+          }
         }
       });
     });
