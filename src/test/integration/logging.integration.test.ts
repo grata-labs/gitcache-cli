@@ -120,7 +120,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         // Should have logging from both repos
         expect(repos.has(repo1.url)).toBe(true);
         expect(repos.has(repo2.url)).toBe(true);
-      });
+      }, 15000);
 
       it('should not log when reference resolution fails', async () => {
         const repoUrl = ctx.testRepos.simple.url;

@@ -9,13 +9,15 @@ import {
   parseSizeToBytes,
 } from '../lib/prune.js';
 import { TarballBuilder } from '../lib/tarball-builder.js';
+import { RegistryClient } from '../lib/registry-client.js';
+import { GitCache } from '../lib/git-cache.js';
+import { AuthManager } from '../lib/auth-manager.js';
 import {
   getCacheDir,
   getPlatformIdentifier,
   getTarballCachePath,
 } from '../lib/utils/path.js';
 import { resolveGitReferences, scanLockfile } from '../lockfile/scan.js';
-import { CacheHierarchy } from '../lib/cache-hierarchy.js';
 
 /**
  * Install command - runs npm install with gitcache as the npm cache
@@ -28,11 +30,17 @@ export class Install extends BaseCommand {
   static params = [];
   static argumentSpec = { type: 'variadic', name: 'args' } as const;
 
-  private cacheHierarchy: CacheHierarchy;
+  private tarballBuilder: TarballBuilder;
+  private registryClient: RegistryClient;
+  private gitCache: GitCache;
+  private authManager: AuthManager;
 
   constructor() {
     super();
-    this.cacheHierarchy = new CacheHierarchy();
+    this.tarballBuilder = new TarballBuilder();
+    this.registryClient = new RegistryClient();
+    this.gitCache = new GitCache();
+    this.authManager = new AuthManager();
   }
 
   async exec(args: string[] = []): Promise<void> {
@@ -145,7 +153,6 @@ export class Install extends BaseCommand {
       }
 
       // Check which tarballs already exist vs need to be built
-      const tarballBuilder = new TarballBuilder();
       const existingTarballs: string[] = [];
       const missingTarballs: Array<{
         name: string;
@@ -188,45 +195,84 @@ export class Install extends BaseCommand {
       const results = await Promise.allSettled(
         missingTarballs.map(async (dep) => {
           try {
-            // First, try to get from cache hierarchy
+            // Simple lookup logic: Local → Registry → Git
             const packageId = `${dep.gitUrl}#${dep.commitSha}`;
-            let tarballData: Buffer | null = null;
+            let tarballFound = false;
 
-            try {
-              if (await this.cacheHierarchy.has(packageId)) {
-                tarballData = await this.cacheHierarchy.get(packageId);
-                console.log(`📥 Retrieved ${dep.name} from cache`);
-              }
-            } catch {
-              // Cache retrieval failed, will build locally
-              console.log(
-                `⚠️  Cache retrieval failed for ${dep.name}, building locally`
-              );
-            }
-
-            if (!tarballData) {
-              // Build tarball locally
-              await tarballBuilder.buildTarball(dep.gitUrl, dep.commitSha, {
-                force: true,
-              });
-
-              // Store in cache hierarchy for future use
-              try {
-                const tarballPath = join(
-                  getTarballCachePath(dep.commitSha, getPlatformIdentifier()),
-                  'package.tgz'
-                );
-                if (existsSync(tarballPath)) {
-                  const fs = await import('node:fs/promises');
-                  const localTarball = await fs.readFile(tarballPath);
-                  await this.cacheHierarchy.store(packageId, localTarball);
-                  console.log(`📤 Stored ${dep.name} in cache hierarchy`);
+            // 1. Check local cache first (TarballBuilder)
+            const cachedTarball = this.tarballBuilder.getCachedTarball(
+              dep.commitSha
+            );
+            if (cachedTarball) {
+              console.log(`📥 Retrieved ${dep.name} from local cache`);
+              tarballFound = true;
+            } else {
+              // 2. Try registry if authenticated (RegistryClient)
+              if (this.authManager.isAuthenticated()) {
+                try {
+                  if (await this.registryClient.has(packageId)) {
+                    const registryTarball =
+                      await this.registryClient.get(packageId);
+                    console.log(`📥 Retrieved ${dep.name} from registry`);
+                    // Store in local cache for future use
+                    const tarballPath = join(
+                      getTarballCachePath(
+                        dep.commitSha,
+                        getPlatformIdentifier()
+                      ),
+                      'package.tgz'
+                    );
+                    const fs = await import('node:fs/promises');
+                    await fs.mkdir(join(tarballPath, '..'), {
+                      recursive: true,
+                    });
+                    await fs.writeFile(tarballPath, registryTarball);
+                    tarballFound = true;
+                  }
+                } catch {
+                  // Registry retrieval failed, will build from git
+                  console.log(
+                    `⚠️  Registry retrieval failed for ${dep.name}, building from git`
+                  );
                 }
-              } catch (cacheError) {
-                // Don't fail if cache storage fails
-                console.log(
-                  `⚠️  Failed to store ${dep.name} in cache: ${cacheError}`
+              }
+
+              // 3. Build from git if not found in local or registry
+              if (!tarballFound) {
+                console.log(`🔨 Building ${dep.name} from git repository`);
+                await this.tarballBuilder.buildTarball(
+                  dep.gitUrl,
+                  dep.commitSha,
+                  {
+                    force: true,
+                  }
                 );
+
+                // Upload to registry for team sharing if authenticated
+                if (this.authManager.isAuthenticated()) {
+                  try {
+                    const tarballPath = join(
+                      getTarballCachePath(
+                        dep.commitSha,
+                        getPlatformIdentifier()
+                      ),
+                      'package.tgz'
+                    );
+                    if (existsSync(tarballPath)) {
+                      const fs = await import('node:fs/promises');
+                      const localTarball = await fs.readFile(tarballPath);
+                      await this.registryClient.upload(packageId, localTarball);
+                      console.log(
+                        `📤 Stored ${dep.name} in registry for team sharing`
+                      );
+                    }
+                  } catch (uploadError) {
+                    // Don't fail if upload fails
+                    console.log(
+                      `⚠️  Failed to upload ${dep.name} to registry: ${uploadError}`
+                    );
+                  }
+                }
               }
             }
 
@@ -302,18 +348,15 @@ export class Install extends BaseCommand {
   }
 
   /**
-   * Show cache hierarchy status and authentication info
+   * Show authentication status and cache info
    */
   private async showCacheStatus(): Promise<void> {
     try {
-      const status = await this.cacheHierarchy.getStatus();
-      const authStatus = status.find((s) => s.strategy === 'Registry');
-
-      if (authStatus?.available && authStatus.authenticated) {
+      if (this.authManager.isAuthenticated()) {
         console.log(
           '🔗 Connected to GitCache registry for transparent caching'
         );
-      } else if (authStatus?.available && !authStatus.authenticated) {
+      } else {
         console.log('💡 Run "gitcache setup" to enable cloud registry caching');
       }
     } catch {
