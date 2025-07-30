@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Setup } from '../../commands/setup.js';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { getCacheDir } from '../../lib/utils/path.js';
 import * as readline from 'node:readline/promises';
 
@@ -19,12 +20,17 @@ describe('Setup Command', () => {
   let mockStdin: any;
   let mockStdout: any;
 
+  // Helper function to get expected auth file path
+  const getExpectedAuthPath = () =>
+    join(join('/', 'home', 'testuser', '.gitcache'), 'auth.json');
+  const getExpectedCacheDir = () => join('/', 'home', 'testuser', '.gitcache');
+
   beforeEach(() => {
     setup = new Setup();
     originalEnv = { ...process.env };
 
     // Mock path utilities
-    vi.mocked(getCacheDir).mockReturnValue('/home/testuser/.gitcache');
+    vi.mocked(getCacheDir).mockReturnValue(getExpectedCacheDir());
 
     // Mock filesystem
     vi.mocked(existsSync).mockReturnValue(true);
@@ -93,6 +99,7 @@ describe('Setup Command', () => {
     });
 
     it('should detect CI environment from GitLab CI', async () => {
+      delete process.env.GITHUB_ACTIONS;
       process.env.GITLAB_CI = 'true';
       process.env.GITCACHE_TOKEN = 'ci_test123';
 
@@ -107,6 +114,7 @@ describe('Setup Command', () => {
     });
 
     it('should detect CI environment from CircleCI', async () => {
+      delete process.env.GITHUB_ACTIONS;
       process.env.CIRCLECI = 'true';
       process.env.GITCACHE_TOKEN = 'ci_test123';
 
@@ -121,6 +129,7 @@ describe('Setup Command', () => {
     });
 
     it('should detect generic CI environment', async () => {
+      delete process.env.GITHUB_ACTIONS;
       process.env.CI = 'true';
       process.env.GITCACHE_TOKEN = 'ci_test123';
 
@@ -198,14 +207,28 @@ describe('Setup Command', () => {
       expect(result).toContain('Invalid token');
     });
 
-    it('should handle network errors', async () => {
-      process.env.GITCACHE_TOKEN = 'ci_test123';
+    it('should handle network error in authenticateUser', async () => {
+      // Test line 330: When fetch throws error in authenticateUser
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      const mockRl = {
+        question: vi.fn().mockResolvedValueOnce('test@example.com'),
+        close: vi.fn(),
+      };
+      vi.mocked(readline.createInterface).mockReturnValueOnce(mockRl as any);
+
+      vi.spyOn(setup as any, 'getPasswordInput').mockResolvedValueOnce(
+        'testpassword'
+      );
 
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      const result = await setup.exec([], { org: 'testorg', ci: true });
+      const result = await setup.exec([], { org: 'testorg' });
 
-      expect(result).toContain('❌ Failed to validate CI token');
+      expect(result).toContain('❌ Setup failed');
       expect(result).toContain('Network error');
     });
 
@@ -237,7 +260,7 @@ describe('Setup Command', () => {
       await setup.exec([], { org: 'testorg', ci: true });
 
       expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
-        '/home/testuser/.gitcache/auth.json',
+        getExpectedAuthPath(),
         expect.stringContaining('"token": "ci_test123"'),
         'utf8'
       );
@@ -285,12 +308,12 @@ describe('Setup Command', () => {
 
       // Verify the auth data was stored
       expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
-        '/home/testuser/.gitcache/auth.json',
+        getExpectedAuthPath(),
         expect.stringContaining('"token": "ci_valid123"'),
         'utf8'
       );
       expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
-        '/home/testuser/.gitcache/auth.json',
+        getExpectedAuthPath(),
         expect.stringContaining('"tokenType": "ci"'),
         'utf8'
       );
@@ -313,20 +336,53 @@ describe('Setup Command', () => {
       expect(result).toContain('✓ CI token configured');
       expect(result).toContain('✓ Registry acceleration enabled');
       expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
-        '/home/testuser/.gitcache/auth.json',
+        getExpectedAuthPath(),
         expect.stringContaining('"token": "ci_valid123"'),
         'utf8'
       );
       expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
-        '/home/testuser/.gitcache/auth.json',
+        getExpectedAuthPath(),
         expect.stringContaining('"tokenType": "ci"'),
         'utf8'
       );
+    });
+
+    it('should detect CI token in local environment and set platform to "CI with token"', async () => {
+      // Clear all CI environment variables to ensure platform starts as 'local'
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITLAB_CI;
+      delete process.env.CIRCLECI;
+
+      // Set only a CI token (no other CI environment indicators)
+      process.env.GITCACHE_TOKEN = 'ci_test123';
+
+      // Mock successful validation response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      // Should detect CI mode due to the ci_ token and succeed
+      expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Registry acceleration enabled');
+
+      // The platform should be detected as "CI with token" when we have a ci_ token but no other CI environment
+      // This tests the specific code path: if (platform === 'local') { platform = 'CI with token'; }
+      expect(result).toContain('✓ Detected CI with token environment');
     });
   });
 
   describe('Interactive mode', () => {
     it('should handle user authentication success', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockResolvedValueOnce('test@example.com'),
         close: vi.fn(),
@@ -350,6 +406,11 @@ describe('Setup Command', () => {
     });
 
     it('should handle authentication failure', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockResolvedValueOnce('test@example.com'),
         close: vi.fn(),
@@ -373,6 +434,11 @@ describe('Setup Command', () => {
     });
 
     it('should handle missing email', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockResolvedValueOnce(''), // Empty email
         close: vi.fn(),
@@ -386,6 +452,11 @@ describe('Setup Command', () => {
     });
 
     it('should handle user cancellation (Ctrl+C)', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockResolvedValueOnce('test@example.com'),
         close: vi.fn(),
@@ -402,6 +473,11 @@ describe('Setup Command', () => {
     });
 
     it('should store user token data with expiration', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockResolvedValueOnce('test@example.com'),
         close: vi.fn(),
@@ -422,7 +498,7 @@ describe('Setup Command', () => {
       const afterTime = Date.now();
 
       expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
-        '/home/testuser/.gitcache/auth.json',
+        getExpectedAuthPath(),
         expect.stringContaining('"tokenType": "user"'),
         'utf8'
       );
@@ -501,10 +577,9 @@ describe('Setup Command', () => {
 
       await setup.exec([], { org: 'testorg', ci: true });
 
-      expect(vi.mocked(mkdirSync)).toHaveBeenCalledWith(
-        '/home/testuser/.gitcache',
-        { recursive: true }
-      );
+      expect(vi.mocked(mkdirSync)).toHaveBeenCalledWith(getExpectedCacheDir(), {
+        recursive: true,
+      });
     });
   });
 
@@ -565,6 +640,11 @@ describe('Setup Command', () => {
 
     it('should handle non-SIGINT error in interactive setup', async () => {
       // Test line 228: Error handling in setupInteractive for general errors (not SIGINT)
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockRejectedValue(new Error('Connection refused')),
         close: vi.fn(),
@@ -619,6 +699,11 @@ describe('Setup Command', () => {
 
     it('should handle JSON parsing error in authenticateUser', async () => {
       // Test line 328: When response.json() fails in authenticateUser and returns default error
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockResolvedValueOnce('test@example.com'),
         close: vi.fn(),
@@ -645,6 +730,11 @@ describe('Setup Command', () => {
     });
 
     it('should handle authenticateUser with empty error object', async () => {
+      // Clear CI environment variables to ensure interactive mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       // Test line 328: error.error?.message || 'Invalid credentials'
       // This tests the case where error.error?.message is falsy
       const mockRl = {
@@ -690,6 +780,11 @@ describe('Setup Command', () => {
 
     it('should handle non-Error thrown in setupInteractive (line 228)', async () => {
       // Test line 228: error instanceof Error ? error.message : 'Unknown error'
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
       const mockRl = {
         question: vi.fn().mockResolvedValueOnce('test@example.com'),
         close: vi.fn(),
