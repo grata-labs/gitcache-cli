@@ -1,3 +1,17 @@
+# [1.4.0](https://github.com/grata-labs/gitcache-cli/compare/v1.3.2...v1.4.0) (2025-07-30)
+
+
+### Bug Fixes
+
+* fix messaging during setup ([0036f50](https://github.com/grata-labs/gitcache-cli/commit/0036f50b45a0820a0107a4c89ef9063b92a7df0b))
+* register hides input correctly, doesn't show double message ([524caf4](https://github.com/grata-labs/gitcache-cli/commit/524caf4d2364980a00b9220a45ae8ce19f30b191))
+
+
+### Features
+
+* adds setup command ([3f851db](https://github.com/grata-labs/gitcache-cli/commit/3f851db6b838cbda3ef948ceffe99ce2bc59f488))
+* implement transparent caching with local/registry/git hierarchy ([2d0bfe5](https://github.com/grata-labs/gitcache-cli/commit/2d0bfe5bc41c825b84af56ba001544ea74580e55))
+
 ## [1.3.2](https://github.com/grata-labs/gitcache-cli/compare/v1.3.1...v1.3.2) (2025-07-22)
 
 
