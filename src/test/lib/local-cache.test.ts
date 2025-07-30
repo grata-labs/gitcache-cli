@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { LocalCache } from '../../lib/local-cache.js';
@@ -87,7 +87,7 @@ describe('LocalCache', () => {
 
       expect(result).toBe(true);
       expect(mockFs.access).toHaveBeenCalledWith(
-        expect.stringContaining('ab/abcdef1234567890.cache')
+        expect.stringContaining(join('ab', 'abcdef1234567890.cache'))
       );
     });
 
@@ -119,7 +119,7 @@ describe('LocalCache', () => {
 
       expect(result).toEqual(testData);
       expect(mockFs.readFile).toHaveBeenCalledWith(
-        expect.stringContaining('ab/abcdef1234567890.cache')
+        expect.stringContaining(join('ab', 'abcdef1234567890.cache'))
       );
     });
 
@@ -159,11 +159,11 @@ describe('LocalCache', () => {
       await localCache.store('test-package', testData);
 
       expect(mockFs.mkdir).toHaveBeenCalledWith(
-        expect.stringContaining('/ab'),
+        expect.stringContaining(sep + 'ab'),
         { recursive: true }
       );
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining('ab/abcdef1234567890.cache'),
+        expect.stringContaining(join('ab', 'abcdef1234567890.cache')),
         testData
       );
     });
@@ -179,7 +179,7 @@ describe('LocalCache', () => {
 
       // Check the second call which should be the metadata file
       const secondCall = mockFs.writeFile.mock.calls[1];
-      expect(secondCall[0]).toContain('ab/abcdef1234567890.meta');
+      expect(secondCall[0]).toContain(join('ab', 'abcdef1234567890.meta'));
 
       const metadataJson = JSON.parse(secondCall[1] as string);
       expect(metadataJson.packageId).toBe('test-package');
@@ -388,10 +388,10 @@ describe('LocalCache', () => {
 
       expect(result).toBe(true);
       expect(mockFs.unlink).toHaveBeenCalledWith(
-        expect.stringContaining('ab/abcdef1234567890.cache')
+        expect.stringContaining(join('ab', 'abcdef1234567890.cache'))
       );
       expect(mockFs.unlink).toHaveBeenCalledWith(
-        expect.stringContaining('ab/abcdef1234567890.meta')
+        expect.stringContaining(join('ab', 'abcdef1234567890.meta'))
       );
     });
 
@@ -813,7 +813,7 @@ describe('LocalCache', () => {
 
       const cachePath = (customCache as any).getCachePath('test-package');
 
-      expect(cachePath).toMatch(/^\/custom\/cache\/dir/);
+      expect(cachePath).toMatch(join('custom', 'cache', 'dir'));
     });
 
     it('should handle large cache statistics calculation', async () => {

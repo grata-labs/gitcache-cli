@@ -53,6 +53,7 @@ describe('Setup Command', () => {
       setEncoding: vi.fn(),
       on: vi.fn(),
       removeAllListeners: vi.fn(),
+      isTTY: true, // Mock TTY environment
     };
     mockStdout = {
       write: vi.fn(),
@@ -516,7 +517,7 @@ describe('Setup Command', () => {
   });
 
   describe('getPasswordInput', () => {
-    it('should handle password input with masking', async () => {
+    it('should handle password input with suppressed output', async () => {
       const passwordPromise = (setup as any).getPasswordInput();
 
       // Simulate typing password
@@ -524,15 +525,15 @@ describe('Setup Command', () => {
         (call: any) => call[0] === 'data'
       )[1];
 
-      onData('p');
-      onData('a');
-      onData('s');
-      onData('s');
-      onData('\n'); // Enter key
+      onData('pass');
+      onData('\r'); // Enter key (carriage return)
 
       const password = await passwordPromise;
       expect(password).toBe('pass');
-      expect(mockStdout.write).toHaveBeenCalledWith('*');
+
+      // The new implementation suppresses output, so no asterisks are written
+      expect(mockStdin.setRawMode).toHaveBeenCalledWith(true);
+      expect(mockStdin.setEncoding).toHaveBeenCalledWith('utf8');
     });
 
     it('should handle backspace in password input', async () => {
@@ -542,11 +543,10 @@ describe('Setup Command', () => {
         (call: any) => call[0] === 'data'
       )[1];
 
-      onData('p');
-      onData('a');
+      onData('pa');
       onData('\u007f'); // Backspace
       onData('s');
-      onData('\n');
+      onData('\r'); // Enter key
 
       const password = await passwordPromise;
       expect(password).toBe('ps');
@@ -562,6 +562,145 @@ describe('Setup Command', () => {
       onData('\u0003'); // Ctrl+C
 
       await expect(passwordPromise).rejects.toThrow('SIGINT');
+    });
+
+    it('should handle non-TTY password input', async () => {
+      // Mock non-TTY environment
+      Object.defineProperty(process.stdin, 'isTTY', {
+        value: false,
+        writable: true,
+      });
+
+      const passwordPromise = (setup as any).getPasswordInput();
+
+      // Simulate data and end events for non-TTY stdin
+      const onData = mockStdin.on.mock.calls.find(
+        (call: any) => call[0] === 'data'
+      )[1];
+      const onEnd = mockStdin.on.mock.calls.find(
+        (call: any) => call[0] === 'end'
+      )[1];
+
+      onData('test-password\n');
+      onEnd();
+
+      const password = await passwordPromise;
+      expect(password).toBe('test-password');
+
+      // Should set encoding but not use raw mode for non-TTY
+      expect(mockStdin.setEncoding).toHaveBeenCalledWith('utf8');
+      expect(mockStdin.setRawMode).not.toHaveBeenCalled();
+    });
+
+    it('should suppress stdout.write output during TTY password input', async () => {
+      let actualOutput: string[] = [];
+
+      // Store original write function
+      const originalWrite = process.stdout.write;
+
+      // Create a test write function that tracks what would be written
+      const testWrite = (chunk: string | Uint8Array): boolean => {
+        if (typeof chunk === 'string') {
+          actualOutput.push(chunk);
+        }
+        return true; // Simulate successful write
+      };
+
+      // Replace stdout.write temporarily
+      process.stdout.write = testWrite as any;
+
+      const passwordPromise = (setup as any).getPasswordInput();
+
+      // Get the data handler
+      const onData = mockStdin.on.mock.calls.find(
+        (call: any) => call[0] === 'data'
+      )[1];
+
+      // Now, getPasswordInput should have overridden stdout.write
+      // Test the suppression by calling the overridden function directly
+      const overriddenWrite = process.stdout.write;
+
+      // Test suppression of string chunks (should be suppressed)
+      const suppressResult = overriddenWrite('user-input-character');
+
+      // Complete password input
+      onData('test');
+      onData('\r');
+
+      const password = await passwordPromise;
+      expect(password).toBe('test');
+
+      // Verify that stdout.write was overridden and suppression worked
+      expect(suppressResult).toBe(true); // Returns true but doesn't actually write
+
+      // The suppressed output should not appear in actualOutput
+      // because the override function returns true without calling originalWrite for strings
+      expect(actualOutput).not.toContain('user-input-character');
+
+      // Restore original write function
+      process.stdout.write = originalWrite;
+    });
+
+    it('should restore stdout.write function after password input completion', async () => {
+      const originalWrite = process.stdout.write;
+
+      const passwordPromise = (setup as any).getPasswordInput();
+
+      // Get the data handler
+      const onData = mockStdin.on.mock.calls.find(
+        (call: any) => call[0] === 'data'
+      )[1];
+
+      // Complete password input
+      onData('test');
+      onData('\r');
+
+      await passwordPromise;
+
+      // Verify that stdout.write was restored to original function
+      expect(process.stdout.write).toBe(originalWrite);
+    });
+
+    it('should pass through non-string chunks and non-intercepted writes to original stdout.write', async () => {
+      let nonStringPassedThrough = false;
+      let afterCleanupPassedThrough = false;
+
+      // Mock original write to track calls
+      const originalWrite = process.stdout.write;
+      process.stdout.write = vi.fn((chunk: string | Uint8Array) => {
+        if (chunk instanceof Uint8Array) {
+          nonStringPassedThrough = true;
+        } else if (typeof chunk === 'string' && chunk === 'after-cleanup') {
+          afterCleanupPassedThrough = true;
+        }
+        return true;
+      });
+
+      const passwordPromise = (setup as any).getPasswordInput();
+
+      // Test non-string chunk (should pass through)
+      const overriddenWrite = process.stdout.write;
+      overriddenWrite(new Uint8Array([65, 66, 67])); // 'ABC' as bytes
+
+      // Get the data handler and complete password input
+      const onData = mockStdin.on.mock.calls.find(
+        (call: any) => call[0] === 'data'
+      )[1];
+
+      onData('test');
+      onData('\r');
+
+      await passwordPromise;
+
+      // Test write after cleanup (intercepting should be false)
+      process.stdout.write('after-cleanup');
+
+      // Verify both code paths were exercised
+      expect(nonStringPassedThrough).toBe(true);
+      expect(afterCleanupPassedThrough).toBe(true);
+
+      // Restore original
+      process.stdout.write = originalWrite;
     });
   });
 

@@ -172,6 +172,94 @@ describe('Install Command Unit Tests - Coverage Focused', () => {
   });
 
   describe('prepareGitDependencies edge cases', () => {
+    it('should store built tarball in cache hierarchy', async () => {
+      // 1) Track existsSync calls so:
+      //    - lockfile → true
+      //    - first package.tgz → false (isTarballCached)
+      //    - second package.tgz → true  (storage check)
+      let callCount = 0;
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        const p = String(path);
+        if (p.includes('package-lock.json')) return true;
+        if (p.includes('package.tgz')) {
+          callCount++;
+          return callCount > 1;
+        }
+        return false;
+      });
+
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0, // successful exit
+        error: undefined, // no error
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      // 2) One Git dep in lockfile
+      vi.mocked(scanLockfile).mockReturnValue({
+        hasGitDependencies: true,
+        lockfileVersion: 2,
+        dependencies: [
+          {
+            name: 'test-package',
+            gitUrl: 'git+https://github.com/test/repo.git',
+            reference: 'abc123',
+            preferredUrl: 'git+https://github.com/test/repo.git',
+          },
+        ],
+      });
+      vi.mocked(resolveGitReferences).mockResolvedValue([
+        {
+          name: 'test-package',
+          gitUrl: 'git+https://github.com/test/repo.git',
+          reference: 'abc123',
+          resolvedSha: 'abc123',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+        },
+      ]);
+
+      // 3) Spy console.log
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // 4) Mock TarballBuilder.buildTarball()
+      const mockBuild = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(TarballBuilder).mockImplementation(
+        () => ({ buildTarball: mockBuild }) as any
+      );
+
+      // 5) Mock readFile to return a Buffer
+      vi.doMock('node:fs/promises', () => ({
+        readFile: vi.fn().mockResolvedValue(Buffer.from('fake-tgz')),
+      }));
+
+      // 6) Inject a cacheHierarchy that “has”=false and “store”=resolved
+      const mockCache = {
+        has: vi.fn().mockResolvedValue(false),
+        get: vi.fn(),
+        store: vi.fn().mockResolvedValue(undefined),
+        getStatus: vi.fn().mockResolvedValue([]),
+      };
+      const cmd = new Install();
+      (cmd as any).cacheHierarchy = mockCache;
+
+      // Run it
+      await cmd.exec([]);
+
+      // Assertions:
+      expect(mockCache.store).toHaveBeenCalledWith(
+        'https://github.com/test/repo.git#abc123',
+        Buffer.from('fake-tgz')
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        '📤 Stored test-package in cache hierarchy'
+      );
+
+      logSpy.mockRestore();
+    });
+
     it('should handle no resolvable Git dependencies', async () => {
       // Mock existsSync to return true (lockfile exists)
       vi.mocked(nodeFs.existsSync).mockReturnValue(true);
