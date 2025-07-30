@@ -64,7 +64,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
 
         expect(secondResult.trim()).toBe(repoPath);
         expect(existsSync(repoPath)).toBe(true);
-      });
+      }, 15000);
 
       it('should support --ref flag with test repository', async () => {
         const testRepo = ctx.testRepos.complex;

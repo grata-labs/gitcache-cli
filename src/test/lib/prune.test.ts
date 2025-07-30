@@ -4,6 +4,7 @@ import {
   rmSync,
   writeFileSync,
   utimesSync,
+  readdirSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,9 +22,17 @@ const { getDefaultMaxCacheSize } = await import('../../lib/config.js');
 
 vi.mock('../../lib/utils/path.js');
 vi.mock('../../lib/config.js');
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual('node:fs');
+  return {
+    ...actual,
+    readdirSync: vi.fn((actual as any).readdirSync),
+  };
+});
 
 const mockGetCacheDir = vi.mocked(getCacheDir);
 const mockGetDefaultMaxCacheSize = vi.mocked(getDefaultMaxCacheSize);
+const mockReaddirSync = vi.mocked(readdirSync);
 
 describe('prune', () => {
   let tempTestDir: string;
@@ -206,6 +215,33 @@ describe('prune', () => {
 
       const entries = getCacheEntries();
       expect(entries).toEqual([]);
+    });
+
+    it('should handle cache directory read errors gracefully', () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Mock readdirSync to throw an error
+      mockReaddirSync.mockImplementationOnce(() => {
+        throw new Error('Permission denied');
+      });
+
+      // Create the cache structure
+      const tarballsDir = join(tempTestDir, 'tarballs');
+      mkdirSync(tarballsDir, { recursive: true });
+
+      const entries = getCacheEntries();
+
+      // Should return empty array when read fails
+      expect(entries).toEqual([]);
+
+      // Should log the warning
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Warning: Could not read cache directory: Error: Permission denied'
+      );
+
+      // Cleanup
+      consoleSpy.mockRestore();
+      mockReaddirSync.mockRestore();
     });
   });
 

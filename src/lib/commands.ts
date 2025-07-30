@@ -6,6 +6,7 @@ import { Prepare } from '../commands/prepare.js';
 import { Prune } from '../commands/prune.js';
 import { Scan } from '../commands/scan.js';
 import { Setup } from '../commands/setup.js';
+import { Status } from '../commands/status.js';
 import type { CommandConfig } from './types.js';
 
 /**
@@ -25,6 +26,10 @@ export const commands: Record<string, CommandConfig> = {
   setup: {
     command: Setup,
     description: Setup.description,
+  },
+  status: {
+    command: Status,
+    description: Status.description,
   },
   scan: {
     command: Scan,
