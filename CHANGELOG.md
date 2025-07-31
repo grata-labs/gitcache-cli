@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/grata-labs/gitcache-cli/compare/v1.4.0...v1.5.0) (2025-07-31)
+
+
+### Features
+
+* simplified cache heirarchy ([d4c5458](https://github.com/grata-labs/gitcache-cli/commit/d4c5458355b7732b305bf61f57f0d555ecadb6b8))
+
 # [1.4.0](https://github.com/grata-labs/gitcache-cli/compare/v1.3.2...v1.4.0) (2025-07-30)
 
 
