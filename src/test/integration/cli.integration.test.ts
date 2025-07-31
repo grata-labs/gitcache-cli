@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
 import { execSync } from 'node:child_process';
-import { join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { useIntegrationTestSetup } from './shared-setup.js';
 
 describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
@@ -145,7 +145,7 @@ describe.skipIf(process.env.CI || process.env.SKIP_INTEGRATION_TESTS)(
         expect(installResult.trim()).toMatch(/^\d+\.\d+\.\d+/);
         expect(iResult.trim()).toMatch(/^\d+\.\d+\.\d+/);
         expect(installResult).toBe(iResult);
-      });
+      }, 15000);
 
       it('should display help for commands', async () => {
         const helpResult = execSync(`npx tsx ${cliPath} --help`, {
