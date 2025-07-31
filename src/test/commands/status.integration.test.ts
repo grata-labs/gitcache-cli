@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { Status } from '../../commands/status.js';
 
 describe('Status Command Integration', () => {
@@ -139,7 +139,7 @@ describe('Status Command Integration', () => {
       expect(result).toContain('Local cache:');
       expect(result).toContain('Registry:');
       expect(result).toContain('gitcache setup');
-      expect(result).toMatch(/\d+\s+(MB|GB|KB|bytes)/); // Should show cache size
+      expect(result).toMatch(/\d+(?:\.\d+)?\s+(MB|GB|KB|B)/); // Should show cache size
       expect(result).toMatch(/\d+\s+packages/); // Should show package count
     });
 

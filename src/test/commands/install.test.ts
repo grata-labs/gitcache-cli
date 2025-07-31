@@ -116,7 +116,7 @@ describe('Install Command - Comprehensive Unit Tests', () => {
           NPM_CONFIG_CACHE: '/mock/cache',
         }),
         cwd: process.cwd(),
-        shell: false,
+        shell: process.platform === 'win32',
       });
     });
 

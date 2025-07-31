@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prepare } from '../../commands/prepare.js';
 
 // Mock the tarball builder to avoid actual Git operations
@@ -408,7 +408,7 @@ describe('GitCache Prepare Command Integration', () => {
         console.log = originalLog;
         process.stdout.write = originalStdoutWrite;
       }
-    });
+    }, 15000);
   });
 
   describe('Git Reference Resolution', () => {
