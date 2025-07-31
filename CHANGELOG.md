@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/grata-labs/gitcache-cli/compare/v1.5.0...v1.6.0) (2025-07-31)
+
+
+### Features
+
+* ci support ([7adda9c](https://github.com/grata-labs/gitcache-cli/commit/7adda9c1abc8c4ba916beac7d6150f9b94bc4247))
+
 # [1.5.0](https://github.com/grata-labs/gitcache-cli/compare/v1.4.0...v1.5.0) (2025-07-31)
 
 
