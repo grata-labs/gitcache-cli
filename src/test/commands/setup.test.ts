@@ -4,11 +4,13 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getCacheDir } from '../../lib/utils/path.js';
 import * as readline from 'node:readline/promises';
+import * as ciEnvironment from '../../lib/ci-environment.js';
 
 // Mock dependencies
 vi.mock('node:fs');
 vi.mock('../../lib/utils/path.js');
 vi.mock('node:readline/promises');
+vi.mock('../../lib/ci-environment.js');
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -37,6 +39,55 @@ describe('Setup Command', () => {
     vi.mocked(readFileSync).mockReturnValue('{}');
     vi.mocked(writeFileSync).mockImplementation(() => {});
     vi.mocked(mkdirSync).mockImplementation(() => '');
+
+    // Mock CI environment detection - default to local environment
+    vi.mocked(ciEnvironment.detectCIEnvironment).mockImplementation(() => {
+      const hasToken = !!process.env.GITCACHE_TOKEN;
+      const tokenSource = hasToken
+        ? ('environment' as const)
+        : ('none' as const);
+
+      // Check for CI environment variables and return appropriate object
+      if (process.env.GITHUB_ACTIONS === 'true') {
+        return {
+          detected: true,
+          platform: 'GitHub Actions',
+          hasToken,
+          tokenSource,
+        };
+      }
+      if (process.env.GITLAB_CI === 'true') {
+        return {
+          detected: true,
+          platform: 'GitLab CI',
+          hasToken,
+          tokenSource,
+        };
+      }
+      if (process.env.CIRCLECI === 'true') {
+        return {
+          detected: true,
+          platform: 'CircleCI',
+          hasToken,
+          tokenSource,
+        };
+      }
+      if (process.env.CI === 'true') {
+        return {
+          detected: true,
+          platform: 'Generic CI',
+          hasToken,
+          tokenSource,
+        };
+      }
+      // Default to local environment
+      return {
+        detected: false,
+        platform: 'local environment',
+        hasToken,
+        tokenSource,
+      };
+    });
 
     // Mock readline interface
     const mockRl = {
@@ -74,6 +125,8 @@ describe('Setup Command', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    // Reset the lazy-loaded RegistryClient to ensure fresh instances
+    (setup as any)._registryClient = undefined;
     vi.restoreAllMocks();
   });
 
@@ -90,13 +143,13 @@ describe('Setup Command', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], { org: 'testorg' });
 
       expect(result).toContain('✓ CI token configured');
-      expect(result).toContain('✓ Detected GitHub Actions environment');
+      expect(result).toContain('✓ Connected to organization: testorg');
     });
 
     it('should detect CI environment from GitLab CI', async () => {
@@ -106,12 +159,13 @@ describe('Setup Command', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], { org: 'testorg' });
 
-      expect(result).toContain('✓ Detected GitLab CI environment');
+      expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Connected to organization: testorg');
     });
 
     it('should detect CI environment from CircleCI', async () => {
@@ -121,12 +175,13 @@ describe('Setup Command', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], { org: 'testorg' });
 
-      expect(result).toContain('✓ Detected CircleCI environment');
+      expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Connected to organization: testorg');
     });
 
     it('should detect generic CI environment', async () => {
@@ -136,12 +191,13 @@ describe('Setup Command', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], { org: 'testorg' });
 
-      expect(result).toContain('✓ Detected Generic CI environment');
+      expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Connected to organization: testorg');
     });
 
     it('should force CI mode with --ci flag', async () => {
@@ -149,24 +205,180 @@ describe('Setup Command', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
       expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Connected to organization: testorg');
+    });
+
+    it('should warn when token organization differs from provided org', async () => {
+      process.env.GITHUB_ACTIONS = 'true';
+      process.env.GITCACHE_TOKEN = 'ci_test123';
+
+      // Mock console.log to capture the warning message
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ organization: 'token-org' }),
+      });
+
+      const result = await setup.exec([], { org: 'provided-org' });
+
+      expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Connected to organization: token-org');
+
+      // Verify the warning message was logged
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '⚠️  Using organization from token: token-org (overrides --org provided-org)'
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle auto-configuration when validation organization is falsey', async () => {
+      process.env.GITHUB_ACTIONS = 'true';
+      process.env.GITCACHE_TOKEN = 'ci_test123';
+
+      // Mock console.log to capture output
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock validation response with no organization field
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ valid: true }), // Missing organization field
+      });
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      expect(result).toContain('❌ GitCache CI setup failed');
+      expect(result).toContain(
+        'Detected GitHub Actions environment but CI token is invalid'
+      );
+      expect(result).toContain('To enable GitCache acceleration:');
+      expect(result).toContain(
+        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle auto-configuration when validateCIToken throws an error', async () => {
+      process.env.GITHUB_ACTIONS = 'true';
+      process.env.GITCACHE_TOKEN = 'ci_test123';
+
+      // Mock console.log to capture output
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock fetch to throw an error (which gets caught by validateCIToken internally)
+      mockFetch.mockRejectedValueOnce(new Error('Network connection failed'));
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      expect(result).toContain('❌ GitCache CI setup failed');
+      expect(result).toContain(
+        'Detected GitHub Actions environment but CI token is invalid'
+      );
+      expect(result).toContain('To enable GitCache acceleration:');
+      expect(result).toContain(
+        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+      );
+
+      // Verify the error was logged (validateCIToken catches the error internally)
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '❌ CI token validation failed: Network connection failed'
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle auto-configuration when validateCIToken method throws an error', async () => {
+      process.env.GITHUB_ACTIONS = 'true';
+      process.env.GITCACHE_TOKEN = 'ci_test123';
+
+      // Mock console.log to capture output
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock the validateCIToken method directly to throw an error
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          validateCIToken: vi
+            .fn()
+            .mockRejectedValue(new Error('Unexpected error')),
+        });
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      expect(result).toContain('❌ GitCache CI setup failed');
+      expect(result).toContain(
+        'Detected GitHub Actions environment but CI token is invalid'
+      );
+      expect(result).toContain('To enable GitCache acceleration:');
+      expect(result).toContain(
+        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+      );
+
+      // Verify the error was logged from the catch block
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '❌ Failed to validate CI token: Error: Unexpected error'
+      );
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
     });
   });
 
   describe('CI mode', () => {
     it('should fail when CI token is missing', async () => {
+      // Mock local environment (not CI) for this specific test
+      vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValueOnce({
+        detected: false,
+        platform: 'local environment',
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
       expect(result).toContain('❌ GitCache CI token not found');
       expect(result).toContain(
-        'CI token authentication is not yet fully implemented'
+        'Detected local environment environment but no GITCACHE_TOKEN found'
       );
-      expect(result).toContain('For now, please use interactive mode');
+    });
+
+    it('should fail when CI token is missing with undefined platform', async () => {
+      // Directly test setupCI with a ciEnv that has undefined platform
+      const ciEnvWithNoPlatform = {
+        detected: true,
+        platform: undefined as any, // Force undefined platform
+        hasToken: false,
+        tokenSource: 'none' as const,
+      };
+
+      const result = await (setup as any).setupCI(
+        'testorg',
+        undefined,
+        ciEnvWithNoPlatform
+      );
+
+      expect(result).toContain('❌ GitCache CI token not found');
+      expect(result).toContain(
+        'Detected CI environment but no GITCACHE_TOKEN found'
+      );
+      expect(result).toContain('To enable GitCache acceleration:');
+      expect(result).toContain(
+        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+      );
+      expect(result).toContain(
+        '2. Set GITCACHE_TOKEN environment variable in your CI configuration'
+      );
+      expect(result).toContain(
+        'Your builds will continue using Git sources without acceleration.'
+      );
     });
 
     it('should fail when CI token format is invalid', async () => {
@@ -181,7 +393,7 @@ describe('Setup Command', () => {
     it('should use explicit token parameter', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], {
@@ -191,6 +403,7 @@ describe('Setup Command', () => {
       });
 
       expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Connected to organization: testorg');
     });
 
     it('should handle API validation failure', async () => {
@@ -204,8 +417,8 @@ describe('Setup Command', () => {
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
-      expect(result).toContain('❌ Failed to validate CI token');
-      expect(result).toContain('Invalid token');
+      expect(result).toContain('❌ GitCache CI token invalid or expired');
+      expect(result).toContain('Invalid or expired CI token');
     });
 
     it('should handle network error in authenticateUser', async () => {
@@ -244,10 +457,8 @@ describe('Setup Command', () => {
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
-      expect(result).toContain(
-        '❌ CI token authentication not yet implemented'
-      );
-      expect(result).toContain('For now, please use interactive mode');
+      expect(result).toContain('❌ GitCache CI token invalid or expired');
+      expect(result).toContain('Validation failed: HTTP 404');
     });
 
     it('should store CI token data', async () => {
@@ -271,23 +482,17 @@ describe('Setup Command', () => {
       // Set up environment for CI token with proper format
       process.env.GITCACHE_TOKEN = 'ci_invalid123';
 
-      // Mock validateCIToken to return false directly (edge case for 100% coverage)
-      const validateSpy = vi
-        .spyOn(setup as any, 'validateCIToken')
-        .mockResolvedValue(false);
+      // Mock a validation failure response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: { message: 'Token access denied' } }),
+      });
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
       expect(result).toContain('❌ GitCache CI token invalid or expired');
-      expect(result).toContain(
-        'Generate a new CI token at: https://gitcache.grata-labs.com/tokens'
-      );
-      expect(result).toContain(
-        'Ensure the token has access to organization: testorg'
-      );
-
-      // Cleanup
-      validateSpy.mockRestore();
+      expect(result).toContain('CI token access denied');
     });
 
     it('should execute successful CI validation flow to completion', async () => {
@@ -298,14 +503,14 @@ describe('Setup Command', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
       // Verify the success messages are returned
       expect(result).toContain('✓ CI token configured');
-      expect(result).toContain('✓ Registry acceleration enabled');
+      expect(result).toContain('✓ Connected to organization: testorg');
 
       // Verify the auth data was stored
       expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
@@ -318,6 +523,34 @@ describe('Setup Command', () => {
         expect.stringContaining('"tokenType": "ci"'),
         'utf8'
       );
+    });
+
+    it('should show info message when CI token organization differs from provided org', async () => {
+      // Set up environment for CI token with proper format
+      process.env.GITCACHE_TOKEN = 'ci_valid123';
+
+      // Mock console.log to capture the info message
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock validation response with different organization
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ organization: 'token-org' }),
+      });
+
+      const result = await setup.exec([], { org: 'provided-org', ci: true });
+
+      // Verify the success messages are returned
+      expect(result).toContain('✓ CI token configured');
+      expect(result).toContain('✓ Connected to organization: token-org');
+
+      // Verify the info message was logged
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'ℹ️  Using organization from token: token-org'
+      );
+
+      consoleSpy.mockRestore();
     });
 
     it('should handle successful CI token validation with explicit token', async () => {
@@ -362,18 +595,44 @@ describe('Setup Command', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       const result = await setup.exec([], { org: 'testorg' });
 
       // Should detect CI mode due to the ci_ token and succeed
       expect(result).toContain('✓ CI token configured');
-      expect(result).toContain('✓ Registry acceleration enabled');
+      expect(result).toContain('✓ Connected to organization: testorg');
+    });
 
-      // The platform should be detected as "CI with token" when we have a ci_ token but no other CI environment
-      // This tests the specific code path: if (platform === 'local') { platform = 'CI with token'; }
-      expect(result).toContain('✓ Detected CI with token environment');
+    it('should handle error in authenticateWithToken during CI setup', async () => {
+      // Set up environment for CI token with proper format
+      process.env.GITCACHE_TOKEN = 'ci_valid123';
+
+      // Mock successful validation response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ organization: 'testorg' }),
+      });
+
+      // Mock writeFileSync to throw an error (simulating filesystem issues)
+      vi.mocked(writeFileSync).mockImplementationOnce(() => {
+        throw new Error('Permission denied: Unable to write auth file');
+      });
+
+      const result = await setup.exec([], { org: 'testorg', ci: true });
+
+      // Verify the catch block error message is returned
+      expect(result).toContain('❌ Failed to validate CI token');
+      expect(result).toContain(
+        'Error: Permission denied: Unable to write auth file'
+      );
+      expect(result).toContain('Please check:');
+      expect(result).toContain('- Network connectivity to GitCache registry');
+      expect(result).toContain('- Token validity and permissions');
+      expect(result).toContain('- Organization access rights');
+      expect(result).toContain('Your builds will continue using Git sources.');
     });
   });
 
@@ -513,6 +772,76 @@ describe('Setup Command', () => {
       expect(writtenData.expiresAt).toBeLessThan(
         afterTime + 31 * 24 * 60 * 60 * 1000
       );
+    });
+
+    it('should block interactive setup when in CI environment', async () => {
+      // Directly test the setupInteractive method when isInCI() returns true
+      // We'll mock the isInCI function to return true to test this specific code path
+
+      // First, clear all environment variables to ensure we start clean
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITLAB_CI;
+      delete process.env.CIRCLECI;
+      delete process.env.JENKINS_HOME;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock the isInCI function to return true for this test
+      const isInCISpy = vi.spyOn(
+        await import('../../lib/ci-environment.js'),
+        'isInCI'
+      );
+      isInCISpy.mockReturnValueOnce(true);
+
+      // Call setupInteractive directly to test the isInCI() check
+      const result = await (setup as any).setupInteractive('testorg');
+
+      expect(result).toContain('❌ Interactive setup not available in CI');
+      expect(result).toContain(
+        'Detected CI environment. Use CI token authentication instead:'
+      );
+      expect(result).toContain(
+        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+      );
+      expect(result).toContain('2. Set GITCACHE_TOKEN environment variable');
+      expect(result).toContain(
+        '3. Run: gitcache setup --org <organization> --ci'
+      );
+      expect(result).toContain('Your builds will continue using Git sources.');
+
+      isInCISpy.mockRestore();
+    });
+
+    it('should allow interactive setup when not in CI environment', async () => {
+      // Ensure we're not in CI mode by clearing all CI environment variables
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITLAB_CI;
+      delete process.env.CIRCLECI;
+      delete process.env.GITCACHE_TOKEN;
+
+      const mockRl = {
+        question: vi.fn().mockResolvedValueOnce('test@example.com'),
+        close: vi.fn(),
+      };
+      vi.mocked(readline.createInterface).mockReturnValueOnce(mockRl as any);
+
+      // Mock password input
+      vi.spyOn(setup as any, 'getPasswordInput').mockResolvedValueOnce(
+        'testpassword'
+      );
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'user_token123' }),
+      });
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      // Should proceed with interactive setup and succeed
+      expect(result).toContain('✓ Connected to GitCache registry');
+      expect(result).toContain('✓ Team cache sharing enabled for testorg');
+      expect(result).not.toContain('❌ Interactive setup not available in CI');
     });
   });
 
@@ -734,8 +1063,15 @@ describe('Setup Command', () => {
       await setup.exec([], { org: 'testorg', ci: true });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/auth/ci-token/validate',
-        expect.any(Object)
+        'https://gitcache.grata-labs.com/api/auth/validate-token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer ci_test123',
+            'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({ token: 'ci_test123' }),
+        })
       );
     });
 
@@ -745,36 +1081,37 @@ describe('Setup Command', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ organization: 'testorg' }),
       });
 
       await setup.exec([], { org: 'testorg', ci: true });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://custom-api.example.com/auth/ci-token/validate',
-        expect.any(Object)
+        'https://custom-api.example.com/api/auth/validate-token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer ci_test123',
+            'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({ token: 'ci_test123' }),
+        })
       );
     });
   });
 
   describe('Branch coverage for uncovered lines', () => {
     it('should handle non-implementation error with different error format in CI setup', async () => {
-      // Test line 166: Error handling when validateCIToken throws error that doesn't include "not yet implemented"
+      // Test error handling when network request fails
       process.env.GITCACHE_TOKEN = 'ci_test123';
 
-      // Mock validateCIToken to throw a different error
-      const validateSpy = vi
-        .spyOn(setup as any, 'validateCIToken')
-        .mockRejectedValue(new Error('Network timeout'));
+      // Mock fetch to throw a network error
+      mockFetch.mockRejectedValueOnce(new Error('Network timeout'));
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
-      expect(result).toContain('❌ Failed to validate CI token');
+      expect(result).toContain('❌ GitCache CI token invalid or expired');
       expect(result).toContain('Network timeout');
-      expect(result).toContain('Please check:');
-      expect(result).toContain('- Network connectivity');
-
-      validateSpy.mockRestore();
     });
 
     it('should handle non-SIGINT error in interactive setup', async () => {
@@ -799,7 +1136,7 @@ describe('Setup Command', () => {
     });
 
     it('should handle JSON parsing error in validateCIToken', async () => {
-      // Test line 304: When response.json() fails and returns default error
+      // Test when response.json() fails and returns default error
       process.env.GITCACHE_TOKEN = 'ci_test123';
 
       // Mock a response that is not ok and json() returns a promise that rejects
@@ -812,14 +1149,12 @@ describe('Setup Command', () => {
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
-      expect(result).toContain('❌ Failed to validate CI token');
-      expect(result).toContain('Unknown error');
-      expect(mockJsonFn).toHaveBeenCalled();
+      expect(result).toContain('❌ GitCache CI token invalid or expired');
+      expect(result).toContain('Validation failed: HTTP 500');
     });
 
     it('should handle validateCIToken with empty error object', async () => {
-      // Test line 304: error.error?.message || `HTTP ${response.status}`
-      // This tests the case where error.error?.message is falsy
+      // Test the case where error.error?.message is falsy
       process.env.GITCACHE_TOKEN = 'ci_test123';
 
       mockFetch.mockResolvedValueOnce({
@@ -832,8 +1167,8 @@ describe('Setup Command', () => {
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
-      expect(result).toContain('❌ Failed to validate CI token');
-      expect(result).toContain('HTTP 403');
+      expect(result).toContain('❌ GitCache CI token invalid or expired');
+      expect(result).toContain('CI token access denied');
     });
 
     it('should handle JSON parsing error in authenticateUser', async () => {
@@ -901,20 +1236,16 @@ describe('Setup Command', () => {
     });
 
     it('should handle non-Error thrown in setupCI (line 166)', async () => {
-      // Test line 166: error instanceof Error ? error.message : 'Unknown error'
+      // Test error handling when fetch throws a non-Error object
       process.env.GITCACHE_TOKEN = 'ci_test123';
 
-      // Mock validateCIToken to throw a non-Error object
-      const validateSpy = vi
-        .spyOn(setup as any, 'validateCIToken')
-        .mockRejectedValue('String error');
+      // Mock fetch to throw a non-Error object
+      mockFetch.mockRejectedValueOnce('String error');
 
       const result = await setup.exec([], { org: 'testorg', ci: true });
 
-      expect(result).toContain('❌ Failed to validate CI token');
-      expect(result).toContain('Unknown error');
-
-      validateSpy.mockRestore();
+      expect(result).toContain('❌ GitCache CI token invalid or expired');
+      expect(result).toContain('Network error during validation');
     });
 
     it('should handle non-Error thrown in setupInteractive (line 228)', async () => {

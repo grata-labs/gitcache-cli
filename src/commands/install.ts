@@ -18,6 +18,11 @@ import {
   getTarballCachePath,
 } from '../lib/utils/path.js';
 import { resolveGitReferences, scanLockfile } from '../lockfile/scan.js';
+import {
+  isInCI,
+  detectCIEnvironment,
+  getCIErrorMessage,
+} from '../lib/ci-environment.js';
 
 /**
  * Install command - runs npm install with gitcache as the npm cache
@@ -352,15 +357,76 @@ export class Install extends BaseCommand {
    */
   private async showCacheStatus(): Promise<void> {
     try {
+      const ciEnv = detectCIEnvironment();
+
       if (this.authManager.isAuthenticated()) {
-        console.log(
-          '🔗 Connected to GitCache registry for transparent caching'
-        );
+        if (ciEnv.detected) {
+          console.log(`🤖 GitCache accelerated build (${ciEnv.platform})`);
+        } else {
+          console.log(
+            '🔗 Connected to GitCache registry for transparent caching'
+          );
+        }
       } else {
-        console.log('💡 Run "gitcache setup" to enable cloud registry caching');
+        // Not authenticated - check if in CI with token
+        if (ciEnv.detected && ciEnv.hasToken) {
+          // Try auto-setup for CI
+          const token = process.env.GITCACHE_TOKEN;
+          if (token?.startsWith('ci_')) {
+            console.log(
+              `🤖 Detected ${ciEnv.platform} with CI token, attempting auto-setup...`
+            );
+            try {
+              const validation =
+                await this.registryClient.validateCIToken(token);
+              if (validation.valid && validation.organization) {
+                // Store token using AuthManager to avoid duplication
+                this.authManager.storeAuthData({
+                  token,
+                  orgId: validation.organization,
+                  tokenType: 'ci',
+                  expiresAt: null,
+                });
+                console.log(
+                  `✅ Auto-configured GitCache for ${validation.organization}`
+                );
+                return;
+              }
+            } catch {
+              // Auto-setup failed, show guidance
+              console.log('⚠️  Auto-setup failed, continuing with Git sources');
+              console.log(getCIErrorMessage('authentication_required'));
+              return;
+            }
+          }
+        }
+
+        if (ciEnv.detected) {
+          if (ciEnv.hasToken) {
+            console.log('⚠️  GitCache token found but invalid');
+            console.log(getCIErrorMessage('token_invalid'));
+          } else {
+            console.log('💡 GitCache not configured for CI acceleration');
+            console.log(getCIErrorMessage('authentication_required'));
+          }
+        } else {
+          console.log(
+            '💡 Run "gitcache setup" to enable cloud registry caching'
+          );
+        }
       }
     } catch {
-      // Status check is non-critical, don't fail the install
+      // Network error or registry unavailable
+      if (isInCI()) {
+        console.log(
+          '⚠️  GitCache registry unavailable, continuing with Git sources'
+        );
+        console.log(getCIErrorMessage('network_error'));
+      } else {
+        console.log(
+          '⚠️  GitCache registry connection failed, using local cache only'
+        );
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { getCacheDir } from './utils/path.js';
 
 export interface AuthData {
@@ -135,6 +135,23 @@ export class AuthManager {
       // Invalid auth file - ignore and start fresh
       this.authData = null;
     }
+  }
+
+  /**
+   * Store authentication data to disk
+   */
+  storeAuthData(authData: AuthData): void {
+    const authDir = dirname(this.authPath);
+
+    // Ensure directory exists
+    if (!existsSync(authDir)) {
+      mkdirSync(authDir, { recursive: true });
+    }
+
+    writeFileSync(this.authPath, JSON.stringify(authData, null, 2), 'utf8');
+
+    // Update in-memory data
+    this.authData = authData;
   }
 
   /**
