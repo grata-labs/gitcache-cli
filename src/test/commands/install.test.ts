@@ -10,6 +10,7 @@ import { GitCache } from '../../lib/git-cache.js';
 import * as pathUtils from '../../lib/utils/path.js';
 import * as pruneUtils from '../../lib/prune.js';
 import * as configUtils from '../../lib/config.js';
+import * as ciEnvironment from '../../lib/ci-environment.js';
 
 // Mock all dependencies
 vi.mock('node:fs');
@@ -23,6 +24,7 @@ vi.mock('../../lib/git-cache.js');
 vi.mock('../../lib/utils/path.js');
 vi.mock('../../lib/prune.js');
 vi.mock('../../lib/config.js');
+vi.mock('../../lib/ci-environment.js');
 
 describe('Install Command - Comprehensive Unit Tests', () => {
   let installCommand: Install;
@@ -43,9 +45,11 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       has: vi.fn(),
       get: vi.fn(),
       upload: vi.fn(),
+      validateCIToken: vi.fn(),
     };
     mockAuthManager = {
       isAuthenticated: vi.fn(),
+      storeAuthData: vi.fn(),
     };
     mockGitCache = {};
 
@@ -1069,10 +1073,48 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
       mockAuthManager.isAuthenticated.mockReturnValue(true);
 
+      // Mock local environment (not CI)
+      vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+        detected: false,
+        platform: 'local',
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
       await installCommand.exec();
 
       expect(console.log).toHaveBeenCalledWith(
         '🔗 Connected to GitCache registry for transparent caching'
+      );
+    });
+
+    it('should show CI accelerated build message when authenticated in CI environment', async () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        error: undefined,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+      vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+      mockAuthManager.isAuthenticated.mockReturnValue(true);
+
+      // Mock CI environment detection
+      vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+        detected: true,
+        platform: 'GitHub Actions',
+        hasToken: true,
+        tokenSource: 'environment',
+      });
+
+      await installCommand.exec();
+
+      expect(console.log).toHaveBeenCalledWith(
+        '🤖 GitCache accelerated build (GitHub Actions)'
       );
     });
 
@@ -1090,6 +1132,17 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       vi.mocked(nodeFs.existsSync).mockReturnValue(false);
       vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
       mockAuthManager.isAuthenticated.mockReturnValue(false);
+
+      // Mock local environment (not CI)
+      vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+        detected: false,
+        platform: 'local',
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      // Mock isInCI to return false so we don't get network error message
+      vi.mocked(ciEnvironment.isInCI).mockReturnValue(false);
 
       await installCommand.exec();
 
@@ -1117,6 +1170,256 @@ describe('Install Command - Comprehensive Unit Tests', () => {
 
       // Should not throw, authentication status is non-critical
       await expect(installCommand.exec()).resolves.toBeUndefined();
+    });
+
+    it('should auto-setup CI token when detected with valid token', async () => {
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = 'ci_test_token_123';
+
+      try {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          error: undefined,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from(''),
+          signal: null,
+          output: [null, Buffer.from(''), Buffer.from('')],
+          pid: 12345,
+        });
+
+        vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+        vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+        mockAuthManager.isAuthenticated.mockReturnValue(false);
+        mockAuthManager.storeAuthData.mockReturnValue(undefined);
+
+        // Mock CI environment with token
+        vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+          detected: true,
+          platform: 'GitHub Actions',
+          hasToken: true,
+          tokenSource: 'environment',
+        });
+
+        // Mock successful token validation
+        mockRegistryClient.validateCIToken.mockResolvedValue({
+          valid: true,
+          organization: 'test-org',
+        });
+
+        await installCommand.exec();
+
+        expect(console.log).toHaveBeenCalledWith(
+          '🤖 Detected GitHub Actions with CI token, attempting auto-setup...'
+        );
+        expect(mockRegistryClient.validateCIToken).toHaveBeenCalledWith(
+          'ci_test_token_123'
+        );
+        expect(mockAuthManager.storeAuthData).toHaveBeenCalledWith({
+          token: 'ci_test_token_123',
+          orgId: 'test-org',
+          tokenType: 'ci',
+          expiresAt: null,
+        });
+        expect(console.log).toHaveBeenCalledWith(
+          '✅ Auto-configured GitCache for test-org'
+        );
+      } finally {
+        // Restore original environment
+        if (originalEnv !== undefined) {
+          process.env.GITCACHE_TOKEN = originalEnv;
+        } else {
+          delete process.env.GITCACHE_TOKEN;
+        }
+      }
+    });
+
+    it('should handle storeAuthData error during auto-setup gracefully', async () => {
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = 'ci_test_token_123';
+
+      try {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          error: undefined,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from(''),
+          signal: null,
+          output: [null, Buffer.from(''), Buffer.from('')],
+          pid: 12345,
+        });
+
+        vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+        vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+        mockAuthManager.isAuthenticated.mockReturnValue(false);
+
+        // Mock storeAuthData to throw an error
+        mockAuthManager.storeAuthData.mockImplementation(() => {
+          throw new Error('Failed to store auth data');
+        });
+
+        // Mock CI environment with token
+        vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+          detected: true,
+          platform: 'GitLab CI',
+          hasToken: true,
+          tokenSource: 'environment',
+        });
+
+        // Mock successful token validation
+        mockRegistryClient.validateCIToken.mockResolvedValue({
+          valid: true,
+          organization: 'test-org',
+        });
+
+        // Mock getCIErrorMessage
+        vi.mocked(ciEnvironment.getCIErrorMessage).mockReturnValue(
+          'Mock CI error message'
+        );
+
+        await installCommand.exec();
+
+        expect(console.log).toHaveBeenCalledWith(
+          '🤖 Detected GitLab CI with CI token, attempting auto-setup...'
+        );
+        expect(mockRegistryClient.validateCIToken).toHaveBeenCalledWith(
+          'ci_test_token_123'
+        );
+        expect(mockAuthManager.storeAuthData).toHaveBeenCalledWith({
+          token: 'ci_test_token_123',
+          orgId: 'test-org',
+          tokenType: 'ci',
+          expiresAt: null,
+        });
+        expect(console.log).toHaveBeenCalledWith(
+          '⚠️  Auto-setup failed, continuing with Git sources'
+        );
+        expect(console.log).toHaveBeenCalledWith('Mock CI error message');
+      } finally {
+        // Restore original environment
+        if (originalEnv !== undefined) {
+          process.env.GITCACHE_TOKEN = originalEnv;
+        } else {
+          delete process.env.GITCACHE_TOKEN;
+        }
+      }
+    });
+
+    it('should show invalid token message when in CI with invalid token', async () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        error: undefined,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+      vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+      mockAuthManager.isAuthenticated.mockReturnValue(false);
+
+      // Mock CI environment with token that's invalid
+      vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+        detected: true,
+        platform: 'GitHub Actions',
+        hasToken: true,
+        tokenSource: 'environment',
+      });
+
+      // Mock getCIErrorMessage
+      vi.mocked(ciEnvironment.getCIErrorMessage).mockReturnValue(
+        'Mock token invalid message'
+      );
+
+      await installCommand.exec();
+
+      expect(console.log).toHaveBeenCalledWith(
+        '⚠️  GitCache token found but invalid'
+      );
+      expect(console.log).toHaveBeenCalledWith('Mock token invalid message');
+      expect(ciEnvironment.getCIErrorMessage).toHaveBeenCalledWith(
+        'token_invalid'
+      );
+    });
+
+    it('should show authentication required message when in CI without token', async () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        error: undefined,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+      vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+      mockAuthManager.isAuthenticated.mockReturnValue(false);
+
+      // Mock CI environment without token
+      vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+        detected: true,
+        platform: 'GitLab CI',
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      // Mock getCIErrorMessage
+      vi.mocked(ciEnvironment.getCIErrorMessage).mockReturnValue(
+        'Mock authentication required message'
+      );
+
+      await installCommand.exec();
+
+      expect(console.log).toHaveBeenCalledWith(
+        '💡 GitCache not configured for CI acceleration'
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        'Mock authentication required message'
+      );
+      expect(ciEnvironment.getCIErrorMessage).toHaveBeenCalledWith(
+        'authentication_required'
+      );
+    });
+
+    it('should show network error message when showCacheStatus fails in CI environment', async () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        error: undefined,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+      vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+
+      // Make detectCIEnvironment throw an error to trigger the catch block
+      vi.mocked(ciEnvironment.detectCIEnvironment).mockImplementation(() => {
+        throw new Error('Network error');
+      });
+
+      // Mock isInCI to return true (CI environment)
+      vi.mocked(ciEnvironment.isInCI).mockReturnValue(true);
+
+      // Mock getCIErrorMessage
+      vi.mocked(ciEnvironment.getCIErrorMessage).mockReturnValue(
+        'Mock network error message'
+      );
+
+      await installCommand.exec();
+
+      expect(console.log).toHaveBeenCalledWith(
+        '⚠️  GitCache registry unavailable, continuing with Git sources'
+      );
+      expect(console.log).toHaveBeenCalledWith('Mock network error message');
+      expect(ciEnvironment.getCIErrorMessage).toHaveBeenCalledWith(
+        'network_error'
+      );
     });
 
     it('should show basic cache size info', async () => {

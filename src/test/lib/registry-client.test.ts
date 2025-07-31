@@ -707,6 +707,149 @@ describe('RegistryClient', () => {
     });
   });
 
+  describe('validateCIToken', () => {
+    it('should return invalid for token not starting with ci_', async () => {
+      const result = await registryClient.validateCIToken('invalid-token');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Token is not a CI token',
+      });
+
+      // Verify that no network request was made
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should return invalid for user token', async () => {
+      const result = await registryClient.validateCIToken('user_token_123');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Token is not a CI token',
+      });
+
+      // Verify that no network request was made
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should return invalid for empty token', async () => {
+      const result = await registryClient.validateCIToken('');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Token is not a CI token',
+      });
+
+      // Verify that no network request was made
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should return invalid for null-like token', async () => {
+      const result = await registryClient.validateCIToken('null');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Token is not a CI token',
+      });
+
+      // Verify that no network request was made
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should validate valid CI token successfully', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          organization: 'test-org',
+        }),
+      });
+
+      const result = await registryClient.validateCIToken('ci_valid_token_123');
+
+      expect(result).toEqual({
+        valid: true,
+        organization: 'test-org',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://gitcache.grata-labs.com/api/auth/validate-token',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ci_valid_token_123',
+          },
+          body: JSON.stringify({ token: 'ci_valid_token_123' }),
+        }
+      );
+    });
+
+    it('should handle 401 unauthorized', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 401,
+      });
+
+      const result = await registryClient.validateCIToken('ci_invalid_token');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Invalid or expired CI token',
+      });
+    });
+
+    it('should handle 403 access denied', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+      });
+
+      const result = await registryClient.validateCIToken('ci_denied_token');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'CI token access denied',
+      });
+    });
+
+    it('should handle other HTTP errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+      });
+
+      const result = await registryClient.validateCIToken('ci_error_token');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Validation failed: HTTP 500',
+      });
+    });
+
+    it('should handle network errors', async () => {
+      mockFetch.mockRejectedValue(new Error('Network connection failed'));
+
+      const result = await registryClient.validateCIToken('ci_network_error');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Network connection failed',
+      });
+    });
+
+    it('should handle non-Error exceptions', async () => {
+      mockFetch.mockRejectedValue('String error');
+
+      const result = await registryClient.validateCIToken('ci_string_error');
+
+      expect(result).toEqual({
+        valid: false,
+        error: 'Network error during validation',
+      });
+    });
+  });
+
   describe('error handling and edge cases', () => {
     it('should handle JSON parsing errors gracefully', async () => {
       mockFetch.mockResolvedValue({

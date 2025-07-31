@@ -2,6 +2,12 @@ import { BaseCommand } from '../base-cmd.js';
 import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { getCacheDir } from '../lib/utils/path.js';
+import {
+  detectCIEnvironment,
+  isInCI,
+  CIEnvironment,
+} from '../lib/ci-environment.js';
+import { RegistryClient, RegistryConfig } from '../lib/registry-client.js';
 import * as readline from 'node:readline/promises';
 
 export interface SetupOptions {
@@ -18,13 +24,6 @@ interface AuthData {
   expiresAt: number | null;
 }
 
-interface CIEnvironment {
-  detected: boolean;
-  platform: string;
-  hasToken: boolean;
-  tokenSource: 'environment' | 'manual' | 'none';
-}
-
 export class Setup extends BaseCommand {
   static description = 'Setup GitCache registry access for team acceleration';
   static commandName = 'setup';
@@ -35,6 +34,20 @@ export class Setup extends BaseCommand {
   ];
   static params = ['org', 'ci', 'token'];
   static argumentSpec = { type: 'none' } as const;
+
+  private _registryClient?: RegistryClient;
+
+  private get registryClient(): RegistryClient {
+    if (!this._registryClient) {
+      // Create config that respects current environment variables
+      const config: Partial<RegistryConfig> = {};
+      if (process.env.GITCACHE_API_URL) {
+        config.apiUrl = process.env.GITCACHE_API_URL;
+      }
+      this._registryClient = new RegistryClient(config);
+    }
+    return this._registryClient;
+  }
 
   async exec(args: string[], opts: SetupOptions = {}): Promise<string> {
     const { org, ci, token } = opts;
@@ -48,8 +61,41 @@ export class Setup extends BaseCommand {
     console.log(`🔗 Setting up GitCache registry for organization: ${org}`);
 
     // Detect CI environment
-    const ciEnv = this.detectCIEnvironment();
+    const ciEnv = detectCIEnvironment();
     const isCIMode = ci || ciEnv.detected;
+
+    // Auto-configuration for CI environments and local environments with CI tokens
+    if (ciEnv.hasToken && !ci && !token) {
+      const envToken = process.env.GITCACHE_TOKEN;
+      if (envToken?.startsWith('ci_')) {
+        const platform = ciEnv.detected ? ciEnv.platform : 'CI with token';
+        console.log(`🤖 Auto-configuring for ${platform} environment`);
+
+        try {
+          // Validate CI token and extract organization
+          const validation =
+            await this.registryClient.validateCIToken(envToken);
+
+          if (validation.valid && validation.organization) {
+            // Use extracted organization, but warn if it differs from provided org
+            const extractedOrg = validation.organization;
+            if (extractedOrg !== org) {
+              console.log(
+                `⚠️  Using organization from token: ${extractedOrg} (overrides --org ${org})`
+              );
+            }
+
+            return this.authenticateWithToken(envToken, extractedOrg);
+          } else {
+            console.log(`❌ CI token validation failed: ${validation.error}`);
+            return this.showCIErrorGuidance(ciEnv);
+          }
+        } catch (error) {
+          console.log(`❌ Failed to validate CI token: ${String(error)}`);
+          return this.showCIErrorGuidance(ciEnv);
+        }
+      }
+    }
 
     if (isCIMode) {
       return this.setupCI(org, token, ciEnv);
@@ -58,40 +104,34 @@ export class Setup extends BaseCommand {
     }
   }
 
-  private detectCIEnvironment(): CIEnvironment {
-    const envToken = process.env.GITCACHE_TOKEN;
+  private authenticateWithToken(token: string, orgId: string): string {
+    // Store CI token
+    this.storeAuthData({
+      token,
+      orgId,
+      tokenType: 'ci',
+      expiresAt: null, // CI tokens never expire
+    });
 
-    let platform = 'local';
-    let detected = false;
+    return [
+      '✓ CI token configured',
+      '✓ Registry acceleration enabled',
+      `✓ Connected to organization: ${orgId}`,
+    ].join('\n');
+  }
 
-    if (process.env.GITHUB_ACTIONS === 'true') {
-      platform = 'GitHub Actions';
-      detected = true;
-    } else if (process.env.GITLAB_CI === 'true') {
-      platform = 'GitLab CI';
-      detected = true;
-    } else if (process.env.CIRCLECI === 'true') {
-      platform = 'CircleCI';
-      detected = true;
-    } else if (process.env.CI === 'true') {
-      platform = 'Generic CI';
-      detected = true;
-    }
-
-    // Also detect if we have a CI token
-    if (envToken?.startsWith('ci_')) {
-      detected = true;
-      if (platform === 'local') {
-        platform = 'CI with token';
-      }
-    }
-
-    return {
-      detected,
-      platform,
-      hasToken: !!envToken,
-      tokenSource: envToken ? 'environment' : 'none',
-    };
+  private showCIErrorGuidance(ciEnv: CIEnvironment): string {
+    return [
+      '❌ GitCache CI setup failed',
+      '',
+      `Detected ${ciEnv.platform} environment but CI token is invalid.`,
+      '',
+      'To enable GitCache acceleration:',
+      '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+      '2. Set GITCACHE_TOKEN environment variable in your CI configuration',
+      '',
+      'Your builds will continue using Git sources without acceleration.',
+    ].join('\n');
   }
 
   private async setupCI(
@@ -105,11 +145,13 @@ export class Setup extends BaseCommand {
       return [
         '❌ GitCache CI token not found',
         '',
-        'CI token authentication is not yet fully implemented.',
-        'For now, please use interactive mode:',
-        `  gitcache setup --org ${org}`,
+        `Detected ${ciEnv?.platform || 'CI'} environment but no GITCACHE_TOKEN found.`,
         '',
-        'CI tokens will be available at: https://gitcache.grata-labs.com/tokens',
+        'To enable GitCache acceleration:',
+        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+        '2. Set GITCACHE_TOKEN environment variable in your CI configuration',
+        '',
+        'Your builds will continue using Git sources without acceleration.',
       ].join('\n');
     }
 
@@ -124,64 +166,61 @@ export class Setup extends BaseCommand {
 
     try {
       // Validate CI token with API
-      const isValid = await this.validateCIToken(token, org);
+      const validation = await this.registryClient.validateCIToken(token);
 
-      if (!isValid) {
+      if (!validation.valid) {
         return [
           '❌ GitCache CI token invalid or expired',
           '',
-          'Generate a new CI token at: https://gitcache.grata-labs.com/tokens',
-          `Ensure the token has access to organization: ${org}`,
+          `Error: ${validation.error}`,
+          '',
+          'To fix:',
+          '1. Generate a new CI token at: https://gitcache.grata-labs.com/tokens',
+          '2. Update GITCACHE_TOKEN in your CI environment',
+          `3. Ensure the token has access to organization: ${org}`,
         ].join('\n');
       }
 
-      // Store CI token
-      this.storeAuthData({
-        token,
-        orgId: org,
-        tokenType: 'ci',
-        expiresAt: null, // CI tokens never expire
-      });
-
-      const result = [
-        '✓ CI token configured',
-        '✓ Registry acceleration enabled',
-      ];
-
-      if (ciEnv?.detected) {
-        result.push(`✓ Detected ${ciEnv.platform} environment`);
+      // Use organization from token validation if available, otherwise use provided org
+      const orgToUse = validation.organization || org;
+      if (validation.organization && validation.organization !== org) {
+        console.log(
+          `ℹ️  Using organization from token: ${validation.organization}`
+        );
       }
 
-      return result.join('\n');
+      return this.authenticateWithToken(token, orgToUse);
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes('not yet implemented')
-      ) {
-        return [
-          '❌ CI token authentication not yet implemented',
-          '',
-          'For now, please use interactive mode:',
-          `  gitcache setup --org ${org}`,
-          '',
-          'CI tokens will be available in a future update.',
-        ].join('\n');
-      }
-
       return [
         '❌ Failed to validate CI token',
         '',
-        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error: ${String(error)}`,
         '',
         'Please check:',
-        '- Network connectivity',
-        '- Token validity',
-        '- Organization access permissions',
+        '- Network connectivity to GitCache registry',
+        '- Token validity and permissions',
+        '- Organization access rights',
+        '',
+        'Your builds will continue using Git sources.',
       ].join('\n');
     }
   }
 
   private async setupInteractive(org: string): Promise<string> {
+    // Don't allow interactive setup in CI environments
+    if (isInCI()) {
+      return [
+        '❌ Interactive setup not available in CI',
+        '',
+        'Detected CI environment. Use CI token authentication instead:',
+        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+        '2. Set GITCACHE_TOKEN environment variable',
+        '3. Run: gitcache setup --org <organization> --ci',
+        '',
+        'Your builds will continue using Git sources.',
+      ].join('\n');
+    }
+
     try {
       console.log('');
 
@@ -325,39 +364,6 @@ export class Setup extends BaseCommand {
         }
       });
     });
-  }
-
-  private async validateCIToken(token: string, org: string): Promise<boolean> {
-    const apiUrl = this.getApiUrl();
-
-    // Note: CI token validation endpoint not yet implemented in infrastructure
-    // For now, this is a placeholder that would validate against /auth/ci-token/validate
-    const response = await fetch(`${apiUrl}/auth/ci-token/validate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        token,
-        organization: org,
-      }),
-    });
-
-    if (!response.ok) {
-      // For now, assume CI tokens are not implemented and return error
-      if (response.status === 404) {
-        throw new Error(
-          'CI token authentication not yet implemented. Please use interactive mode.'
-        );
-      }
-      const error = await response
-        .json()
-        .catch(() => ({ error: { message: 'Unknown error' } }));
-      throw new Error(error.error?.message || `HTTP ${response.status}`);
-    }
-
-    return true;
   }
 
   private async authenticateUser(

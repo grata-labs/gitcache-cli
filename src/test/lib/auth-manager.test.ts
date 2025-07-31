@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { AuthManager } from '../../lib/auth-manager.js';
 import { getCacheDir } from '../../lib/utils/path.js';
 
@@ -7,14 +8,22 @@ import { getCacheDir } from '../../lib/utils/path.js';
 vi.mock('node:fs', () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
   promises: {
     writeFile: vi.fn(),
     mkdir: vi.fn(),
   },
 }));
 
+// Test constants for cross-platform path handling
+const TEST_CACHE_DIR = join('home', 'test', '.gitcache');
+const TEST_AUTH_FILE = join(TEST_CACHE_DIR, 'auth.json');
+const TEST_NESTED_CACHE_DIR = join('home', 'test', 'nested', '.gitcache');
+const TEST_NESTED_AUTH_FILE = join(TEST_NESTED_CACHE_DIR, 'auth.json');
+
 vi.mock('../../lib/utils/path.js', () => ({
-  getCacheDir: vi.fn().mockReturnValue('/home/test/.gitcache'),
+  getCacheDir: vi.fn().mockReturnValue(join('home', 'test', '.gitcache')),
 }));
 
 // Mock fetch globally
@@ -23,6 +32,8 @@ global.fetch = mockFetch;
 
 const mockReadFileSync = vi.mocked(readFileSync);
 const mockExistsSync = vi.mocked(existsSync);
+const mockWriteFileSync = vi.mocked(writeFileSync);
+const mockMkdirSync = vi.mocked(mkdirSync);
 const mockGetCacheDir = vi.mocked(getCacheDir);
 
 describe('AuthManager', () => {
@@ -32,7 +43,7 @@ describe('AuthManager', () => {
     vi.clearAllMocks();
 
     // Setup consistent mocks
-    mockGetCacheDir.mockReturnValue('/home/test/.gitcache');
+    mockGetCacheDir.mockReturnValue(TEST_CACHE_DIR);
 
     // Default to no auth file existing
     mockExistsSync.mockReturnValue(false);
@@ -513,6 +524,320 @@ describe('AuthManager', () => {
       expect(isValid).toBe(false);
       // Auth data should be cleared after failed validation
       expect(authManager.isAuthenticated()).toBe(false);
+    });
+  });
+
+  describe('storeAuthData', () => {
+    beforeEach(() => {
+      // Setup fresh state for each storeAuthData test
+      mockExistsSync.mockReturnValue(false);
+      mockWriteFileSync.mockClear();
+      mockMkdirSync.mockClear();
+    });
+
+    it('should store valid user auth data successfully', () => {
+      const authData = {
+        token: 'user-token-123',
+        email: 'test@example.com',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+
+      // Directory already exists
+      mockExistsSync.mockReturnValue(true);
+
+      authManager = new AuthManager();
+      authManager.storeAuthData(authData);
+
+      // Verify writeFileSync was called with correct parameters
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_AUTH_FILE,
+        JSON.stringify(authData, null, 2),
+        'utf8'
+      );
+
+      // Verify directory creation was not needed
+      expect(mockMkdirSync).not.toHaveBeenCalled();
+
+      // Verify in-memory data was updated
+      expect(authManager.isAuthenticated()).toBe(true);
+      expect(authManager.getAuthToken()).toBe('user-token-123');
+      expect(authManager.getOrgId()).toBe('test-org');
+      expect(authManager.getTokenType()).toBe('user');
+    });
+
+    it('should store valid CI auth data successfully', () => {
+      const authData = {
+        token: 'ci_token_456',
+        orgId: 'ci-org',
+        tokenType: 'ci' as const,
+        expiresAt: null,
+      };
+
+      // Directory already exists
+      mockExistsSync.mockReturnValue(true);
+
+      authManager = new AuthManager();
+      authManager.storeAuthData(authData);
+
+      // Verify writeFileSync was called with correct parameters
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_AUTH_FILE,
+        JSON.stringify(authData, null, 2),
+        'utf8'
+      );
+
+      // Verify directory creation was not needed
+      expect(mockMkdirSync).not.toHaveBeenCalled();
+
+      // Verify in-memory data was updated
+      expect(authManager.isAuthenticated()).toBe(true);
+      expect(authManager.getAuthToken()).toBe('ci_token_456');
+      expect(authManager.getOrgId()).toBe('ci-org');
+      expect(authManager.getTokenType()).toBe('ci');
+    });
+
+    it('should create directory when it does not exist', () => {
+      const authData = {
+        token: 'token-123',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+
+      // Directory does not exist
+      mockExistsSync.mockReturnValue(false);
+
+      authManager = new AuthManager();
+      authManager.storeAuthData(authData);
+
+      // Verify directory was created recursively
+      expect(mockMkdirSync).toHaveBeenCalledWith(TEST_CACHE_DIR, {
+        recursive: true,
+      });
+
+      // Verify file was written
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_AUTH_FILE,
+        JSON.stringify(authData, null, 2),
+        'utf8'
+      );
+
+      // Verify in-memory data was updated
+      expect(authManager.isAuthenticated()).toBe(true);
+    });
+
+    it('should handle nested directory structure', () => {
+      // Mock a deeper cache directory path
+      mockGetCacheDir.mockReturnValue(TEST_NESTED_CACHE_DIR);
+
+      const authData = {
+        token: 'token-deep',
+        orgId: 'deep-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+
+      // Directory does not exist
+      mockExistsSync.mockReturnValue(false);
+
+      authManager = new AuthManager();
+      authManager.storeAuthData(authData);
+
+      // Verify directory was created recursively for nested path
+      expect(mockMkdirSync).toHaveBeenCalledWith(TEST_NESTED_CACHE_DIR, {
+        recursive: true,
+      });
+
+      // Verify file was written to correct path
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_NESTED_AUTH_FILE,
+        JSON.stringify(authData, null, 2),
+        'utf8'
+      );
+    });
+
+    it('should overwrite existing auth data', () => {
+      // Start with existing auth data
+      const existingData = {
+        token: 'old-token',
+        orgId: 'old-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 1000,
+      };
+
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(existingData));
+
+      authManager = new AuthManager();
+
+      // Verify initial state
+      expect(authManager.getAuthToken()).toBe('old-token');
+      expect(authManager.getOrgId()).toBe('old-org');
+
+      // Store new auth data
+      const newData = {
+        token: 'new-token',
+        email: 'new@example.com',
+        orgId: 'new-org',
+        tokenType: 'ci' as const,
+        expiresAt: null,
+      };
+
+      authManager.storeAuthData(newData);
+
+      // Verify new data was written
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_AUTH_FILE,
+        JSON.stringify(newData, null, 2),
+        'utf8'
+      );
+
+      // Verify in-memory data was updated
+      expect(authManager.getAuthToken()).toBe('new-token');
+      expect(authManager.getOrgId()).toBe('new-org');
+      expect(authManager.getTokenType()).toBe('ci');
+    });
+
+    it('should handle filesystem errors gracefully', () => {
+      const authData = {
+        token: 'token-error',
+        orgId: 'error-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+
+      // Directory exists but writeFileSync throws
+      mockExistsSync.mockReturnValue(true);
+      mockWriteFileSync.mockImplementation(() => {
+        throw new Error('Permission denied');
+      });
+
+      authManager = new AuthManager();
+
+      // Should throw error when filesystem operation fails
+      expect(() => {
+        authManager.storeAuthData(authData);
+      }).toThrow('Permission denied');
+
+      // Verify the file write was attempted
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_AUTH_FILE,
+        JSON.stringify(authData, null, 2),
+        'utf8'
+      );
+    });
+
+    it('should handle directory creation errors gracefully', () => {
+      const authData = {
+        token: 'token-mkdir-error',
+        orgId: 'mkdir-error-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+
+      // Directory doesn't exist and mkdirSync throws
+      mockExistsSync.mockReturnValue(false);
+      mockMkdirSync.mockImplementation(() => {
+        throw new Error('Cannot create directory');
+      });
+
+      authManager = new AuthManager();
+
+      // Should throw error when directory creation fails
+      expect(() => {
+        authManager.storeAuthData(authData);
+      }).toThrow('Cannot create directory');
+
+      // Verify directory creation was attempted
+      expect(mockMkdirSync).toHaveBeenCalledWith(TEST_CACHE_DIR, {
+        recursive: true,
+      });
+
+      // File write should not be attempted if directory creation fails
+      expect(mockWriteFileSync).not.toHaveBeenCalled();
+    });
+
+    it('should handle auth data with optional fields', () => {
+      // Test with minimal required fields only
+      const minimalData = {
+        token: 'minimal-token',
+        orgId: 'minimal-org',
+        tokenType: 'ci' as const,
+        expiresAt: null,
+      };
+
+      mockExistsSync.mockReturnValue(true);
+
+      authManager = new AuthManager();
+      authManager.storeAuthData(minimalData);
+
+      // Verify data was stored correctly
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_AUTH_FILE,
+        JSON.stringify(minimalData, null, 2),
+        'utf8'
+      );
+
+      // Verify in-memory data
+      expect(authManager.getAuthToken()).toBe('minimal-token');
+      expect(authManager.getOrgId()).toBe('minimal-org');
+      expect(authManager.getTokenType()).toBe('ci');
+    });
+
+    it('should format JSON with proper indentation', () => {
+      const authData = {
+        token: 'format-test-token',
+        email: 'format@example.com',
+        orgId: 'format-org',
+        tokenType: 'user' as const,
+        expiresAt: 1234567890,
+      };
+
+      mockExistsSync.mockReturnValue(true);
+
+      authManager = new AuthManager();
+      authManager.storeAuthData(authData);
+
+      // Verify JSON.stringify was called with proper formatting
+      const expectedJson = JSON.stringify(authData, null, 2);
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        TEST_AUTH_FILE,
+        expectedJson,
+        'utf8'
+      );
+
+      // Verify the formatted JSON has proper indentation
+      expect(expectedJson).toContain('  "token":');
+      expect(expectedJson).toContain('  "email":');
+      expect(expectedJson).toContain('  "orgId":');
+    });
+
+    it('should update in-memory data even when previously unauthenticated', () => {
+      // Start with no auth data
+      mockExistsSync.mockReturnValue(false);
+
+      authManager = new AuthManager();
+
+      // Verify initially unauthenticated
+      expect(authManager.isAuthenticated()).toBe(false);
+
+      const authData = {
+        token: 'new-user-token',
+        email: 'newuser@example.com',
+        orgId: 'new-user-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 7200000,
+      };
+
+      authManager.storeAuthData(authData);
+
+      // Verify now authenticated with new data
+      expect(authManager.isAuthenticated()).toBe(true);
+      expect(authManager.getAuthToken()).toBe('new-user-token');
+      expect(authManager.getOrgId()).toBe('new-user-org');
+      expect(authManager.getTokenType()).toBe('user');
     });
   });
 });

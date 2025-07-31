@@ -66,6 +66,64 @@ export class RegistryClient {
   }
 
   /**
+   * Validate CI token and extract organization information
+   *
+   * Note: This assumes the /api/auth/validate-token endpoint exists in the GitCache infrastructure.
+   * The endpoint should accept a POST request with Authorization header and return:
+   * - 200: { organization: "org-name" }
+   * - 401: Invalid/expired token
+   * - 403: Access denied
+   */
+  async validateCIToken(
+    token: string
+  ): Promise<{ valid: boolean; organization?: string; error?: string }> {
+    if (!token.startsWith('ci_')) {
+      return { valid: false, error: 'Token is not a CI token' };
+    }
+
+    try {
+      const response = await fetch(
+        `${this.config.apiUrl}/api/auth/validate-token`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ token }),
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          return { valid: false, error: 'Invalid or expired CI token' };
+        }
+        if (response.status === 403) {
+          return { valid: false, error: 'CI token access denied' };
+        }
+        return {
+          valid: false,
+          error: `Validation failed: HTTP ${response.status}`,
+        };
+      }
+
+      const result = await response.json();
+      return {
+        valid: true,
+        organization: result.organization,
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Network error during validation',
+      };
+    }
+  }
+
+  /**
    * Check if an artifact exists in the registry
    */
   async has(packageId: string): Promise<boolean> {
