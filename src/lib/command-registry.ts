@@ -52,33 +52,43 @@ function registerCommand(
   cmd
     /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
     .action(async (...args: unknown[]) => {
-      // Parse arguments based on command type
-      let commandArgs: string[] = [];
-      let opts: Record<string, unknown> = {};
+      try {
+        // Parse arguments based on command type
+        let commandArgs: string[] = [];
+        let opts: Record<string, unknown> = {};
 
-      if (!argumentSpec || argumentSpec.type === 'none') {
-        // No positional arguments - last argument is options
-        opts = (args[0] as Record<string, unknown>) || {};
-      } else if (argumentSpec.type === 'required') {
-        // Single required argument - first is the argument, second is options
-        const [requiredArg, options] = args;
-        commandArgs = [requiredArg as string];
-        opts = (options as Record<string, unknown>) || {};
-      } else if (argumentSpec.type === 'variadic') {
-        // Variadic arguments - first is array of args, second is options
-        const [variadicArgs, options] = args;
-        commandArgs = (variadicArgs as string[]) || [];
-        opts = (options as Record<string, unknown>) || {};
-      }
+        if (!argumentSpec || argumentSpec.type === 'none') {
+          // No positional arguments - last argument is options
+          opts = (args[0] as Record<string, unknown>) || {};
+        } else if (argumentSpec.type === 'required') {
+          // Single required argument - first is the argument, second is options
+          const [requiredArg, options] = args;
+          commandArgs = [requiredArg as string];
+          opts = (options as Record<string, unknown>) || {};
+        } else if (argumentSpec.type === 'variadic') {
+          // Variadic arguments - first is array of args, second is options
+          const [variadicArgs, options] = args;
+          commandArgs = (variadicArgs as string[]) || [];
+          opts = (options as Record<string, unknown>) || {};
+        }
 
-      const instance = new config.command();
-      const result = instance.exec(commandArgs, opts);
+        const instance = new config.command();
+        const result = instance.exec(commandArgs, opts);
 
-      // Handle both sync and async commands
-      const finalResult = result instanceof Promise ? await result : result;
+        // Handle both sync and async commands
+        const finalResult = result instanceof Promise ? await result : result;
 
-      if (finalResult !== undefined && finalResult !== null) {
-        console.log(finalResult);
+        if (finalResult !== undefined && finalResult !== null) {
+          console.log(finalResult);
+        }
+      } catch (error) {
+        // Handle errors gracefully - show clean error message for user errors
+        if (error instanceof Error) {
+          console.error(error.message);
+        } else {
+          console.error('An unexpected error occurred:', String(error));
+        }
+        process.exit(1);
       }
     });
   /* c8 ignore end */
@@ -109,31 +119,41 @@ function registerAliases(
         aliasCmd
           /* c8 ignore start - CLI action callback is thin wrapper, tested via integration tests */
           .action(async (...args: unknown[]) => {
-            // Parse arguments based on command type (same logic as main commands)
-            let commandArgs: string[] = [];
-            let opts: Record<string, unknown> = {};
+            try {
+              // Parse arguments based on command type (same logic as main commands)
+              let commandArgs: string[] = [];
+              let opts: Record<string, unknown> = {};
 
-            if (!argumentSpec || argumentSpec.type === 'none') {
-              opts = (args[0] as Record<string, unknown>) || {};
-            } else if (argumentSpec.type === 'required') {
-              const [requiredArg, options] = args;
-              commandArgs = [requiredArg as string];
-              opts = (options as Record<string, unknown>) || {};
-            } else if (argumentSpec.type === 'variadic') {
-              const [variadicArgs, options] = args;
-              commandArgs = (variadicArgs as string[]) || [];
-              opts = (options as Record<string, unknown>) || {};
-            }
+              if (!argumentSpec || argumentSpec.type === 'none') {
+                opts = (args[0] as Record<string, unknown>) || {};
+              } else if (argumentSpec.type === 'required') {
+                const [requiredArg, options] = args;
+                commandArgs = [requiredArg as string];
+                opts = (options as Record<string, unknown>) || {};
+              } else if (argumentSpec.type === 'variadic') {
+                const [variadicArgs, options] = args;
+                commandArgs = (variadicArgs as string[]) || [];
+                opts = (options as Record<string, unknown>) || {};
+              }
 
-            const instance = new config.command();
-            const result = instance.exec(commandArgs, opts);
+              const instance = new config.command();
+              const result = instance.exec(commandArgs, opts);
 
-            // Handle both sync and async commands
-            const finalResult =
-              result instanceof Promise ? await result : result;
+              // Handle both sync and async commands
+              const finalResult =
+                result instanceof Promise ? await result : result;
 
-            if (finalResult !== undefined && finalResult !== null) {
-              console.log(finalResult);
+              if (finalResult !== undefined && finalResult !== null) {
+                console.log(finalResult);
+              }
+            } catch (error) {
+              // Handle errors gracefully - show clean error message for user errors
+              if (error instanceof Error) {
+                console.error(error.message);
+              } else {
+                console.error('An unexpected error occurred:', String(error));
+              }
+              process.exit(1);
             }
           })
           /* c8 ignore end */

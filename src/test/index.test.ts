@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { addRepository, cacheRepository, main } from '../index.js';
 import { npmInstall } from '../lib/api.js';
 import { getTargetPath } from '../lib/utils/path.js';
@@ -215,7 +215,7 @@ describe('gitcache CLI', () => {
 
       await expect(main()).rejects.toThrow('process.exit called');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.any(Error));
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Test error');
       expect(processExitSpy).toHaveBeenCalledWith(1);
 
       consoleErrorSpy.mockRestore();

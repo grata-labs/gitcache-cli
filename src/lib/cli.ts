@@ -29,7 +29,12 @@ export function main(): Promise<Command> {
   const program = createCLI();
 
   return program.parseAsync(process.argv).catch((err) => {
-    console.error(err);
+    // Handle errors gracefully - avoid showing stack traces for user errors
+    if (err instanceof Error) {
+      console.error(err.message);
+    } else {
+      console.error('An unexpected error occurred:', String(err));
+    }
     process.exit(1);
   });
 }
