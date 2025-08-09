@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Status } from '../../commands/status.js';
+import { Auth } from '../../commands/auth.js';
 
 describe('Status Command Integration', () => {
   let statusCommand: Status;
@@ -92,6 +93,10 @@ describe('Status Command Integration', () => {
 
   describe('registry status indicators', () => {
     it('should show appropriate registry status when not authenticated', async () => {
+      // Clear any existing authentication for this test
+      const authCommand = new Auth();
+      authCommand.exec(['logout'], {});
+
       const result = await statusCommand.exec([], {});
 
       // Should show not connected status
@@ -99,6 +104,10 @@ describe('Status Command Integration', () => {
     });
 
     it('should include setup guidance when not authenticated', async () => {
+      // Clear any existing authentication for this test
+      const authCommand = new Auth();
+      authCommand.exec(['logout'], {});
+
       const result = await statusCommand.exec([], { detailed: true });
 
       expect(result).toContain('gitcache setup');
@@ -134,6 +143,10 @@ describe('Status Command Integration', () => {
   describe('expected user workflows', () => {
     it('should provide complete status information for new users', async () => {
       // Expected path: new user runs gitcache status
+      // Clear any existing authentication for this test
+      const authCommand = new Auth();
+      authCommand.exec(['logout'], {});
+
       const result = await statusCommand.exec([], {});
 
       expect(result).toContain('Local cache:');
@@ -172,7 +185,10 @@ describe('Status Command Integration', () => {
       expect(parsed).toHaveProperty('registry');
       expect(parsed.registry).toHaveProperty('connected');
       expect(parsed.registry).toHaveProperty('organization');
-      expect(parsed.registry).toHaveProperty('reason');
+      // Note: 'reason' is only present when connected=false
+      if (!parsed.registry.connected) {
+        expect(parsed.registry).toHaveProperty('reason');
+      }
     });
 
     it('should show cache growth over time', async () => {
@@ -186,6 +202,10 @@ describe('Status Command Integration', () => {
 
     it('should help troubleshoot connection issues', async () => {
       // Expected path: user has connection problems
+      // Clear any existing authentication to simulate connection issues
+      const authCommand = new Auth();
+      authCommand.exec(['logout'], {});
+
       const result = await statusCommand.exec([], { detailed: true });
 
       expect(result).toContain('Registry:');

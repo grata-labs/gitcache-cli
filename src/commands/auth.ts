@@ -61,11 +61,40 @@ export class Auth extends BaseCommand {
       // Authenticate with Cognito
       const authResult = await this.authenticateWithCognito(email, password);
 
-      // Store auth data
+      // Get user's organizations to determine default
+      let defaultOrgId = authResult.orgId;
+      let orgMessage = `🏢 Organization: ${defaultOrgId}`;
+
+      try {
+        // Create a temporary registry client to fetch organizations
+        const { RegistryClient } = await import('../lib/registry-client.js');
+        const tempClient = new RegistryClient();
+
+        // Store the token temporarily to fetch organizations
+        this.authManager.storeAuthData({
+          token: authResult.idToken,
+          email,
+          orgId: authResult.orgId,
+          tokenType: 'user',
+          expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
+        });
+
+        const orgsResult = await tempClient.listOrganizations();
+        if (orgsResult.defaultOrganization) {
+          defaultOrgId = orgsResult.defaultOrganization;
+          if (defaultOrgId !== authResult.orgId) {
+            orgMessage = `🏢 Organization: ${defaultOrgId} (your default)`;
+          }
+        }
+      } catch {
+        // Fallback to the org from auth result if fetching organizations fails
+      }
+
+      // Store final auth data with correct organization
       this.authManager.storeAuthData({
         token: authResult.idToken,
         email,
-        orgId: authResult.orgId,
+        orgId: defaultOrgId,
         tokenType: 'user',
         expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour (Cognito token)
       });
@@ -73,11 +102,12 @@ export class Auth extends BaseCommand {
       return [
         '✅ Authentication successful!',
         `📧 Logged in as: ${email}`,
-        `🏢 Organization: ${authResult.orgId}`,
+        orgMessage,
         '',
         '💡 You can now:',
         '  • Create CI tokens: gitcache tokens create <name>',
         '  • List your tokens: gitcache tokens list',
+        '  • List organizations: gitcache setup --list-orgs',
         '  • Use all GitCache features',
       ].join('\n');
     } catch (error) {
@@ -106,6 +136,7 @@ export class Auth extends BaseCommand {
     // Clear auth data by storing null token
     this.authManager.storeAuthData({
       token: '',
+      email: undefined,
       orgId: '',
       tokenType: 'user',
       expiresAt: null,
@@ -129,25 +160,29 @@ export class Auth extends BaseCommand {
 
     const tokenType = this.authManager.getTokenType();
     const orgId = this.authManager.getOrgId();
+    const email = this.authManager.getEmail();
 
     if (tokenType === 'ci') {
       return [
         '✅ Authenticated with CI token',
-        `🏢 Organization: ${orgId}`,
+        `🏢 Organization context: ${orgId}`,
         `🔑 Token type: CI token`,
         '',
         '💡 CI tokens are long-lived and perfect for automation',
       ].join('\n');
     }
 
+    const userInfo = `✅ Authenticated as: ${email}`;
+
     return [
-      '✅ Authenticated with user account',
-      `🏢 Organization: ${orgId}`,
+      userInfo,
+      `🏢 Organization context: ${orgId}`,
       `🔑 Token type: User session`,
       '',
       '💡 Available commands:',
       '  • gitcache tokens create <name> - Generate CI token',
       '  • gitcache tokens list - View your tokens',
+      '  • gitcache setup --list-orgs - View organizations',
     ].join('\n');
   }
 
@@ -272,13 +307,13 @@ export class Auth extends BaseCommand {
     // Extract organization from token or user data
     // For now, we'll use a default organization extraction
     // In a real implementation, this would come from the user's profile
-    const orgId = result.organizationId || result.orgId || 'default';
+    const orgId = result.organizationId || result.orgId || null;
 
     return {
       idToken: result.idToken,
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
-      orgId,
+      orgId: orgId || 'unknown', // Use 'unknown' instead of 'default'
     };
   }
 
