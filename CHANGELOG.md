@@ -1,3 +1,17 @@
+# [1.7.0](https://github.com/grata-labs/gitcache-cli/compare/v1.6.0...v1.7.0) (2025-08-09)
+
+
+### Bug Fixes
+
+* adds tests for new files, uses real url ([e597c66](https://github.com/grata-labs/gitcache-cli/commit/e597c66edff753b945508adc8004ba1525e6bb7d))
+* error messages show friendly messages, not stack trace ([#95](https://github.com/grata-labs/gitcache-cli/issues/95)) ([280d436](https://github.com/grata-labs/gitcache-cli/commit/280d4364babc5afd34847199b2c58dffee703e5b))
+* update package lock ([b25d4c6](https://github.com/grata-labs/gitcache-cli/commit/b25d4c6a8243deb48565cddcfdb58e4390a3f2a0))
+
+
+### Features
+
+* working tokens ([8770bc3](https://github.com/grata-labs/gitcache-cli/commit/8770bc36a476f178fd00c80f908894ae8f1ffa45))
+
 # [1.6.0](https://github.com/grata-labs/gitcache-cli/compare/v1.5.0...v1.6.0) (2025-07-31)
 
 
