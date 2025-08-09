@@ -127,7 +127,7 @@ export class Setup extends BaseCommand {
       `Detected ${ciEnv.platform} environment but CI token is invalid.`,
       '',
       'To enable GitCache acceleration:',
-      '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+      '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/',
       '2. Set GITCACHE_TOKEN environment variable in your CI configuration',
       '',
       'Your builds will continue using Git sources without acceleration.',
@@ -148,7 +148,7 @@ export class Setup extends BaseCommand {
         `Detected ${ciEnv?.platform || 'CI'} environment but no GITCACHE_TOKEN found.`,
         '',
         'To enable GitCache acceleration:',
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/',
         '2. Set GITCACHE_TOKEN environment variable in your CI configuration',
         '',
         'Your builds will continue using Git sources without acceleration.',
@@ -160,7 +160,7 @@ export class Setup extends BaseCommand {
         '❌ Invalid CI token format',
         '',
         'CI tokens must start with "ci_"',
-        'Generate a new CI token at: https://gitcache.grata-labs.com/tokens',
+        'Generate a new CI token at: https://grata-labs.com/gitcache/account/dashboard/',
       ].join('\n');
     }
 
@@ -175,7 +175,7 @@ export class Setup extends BaseCommand {
           `Error: ${validation.error}`,
           '',
           'To fix:',
-          '1. Generate a new CI token at: https://gitcache.grata-labs.com/tokens',
+          '1. Generate a new CI token at: https://grata-labs.com/gitcache/account/dashboard/',
           '2. Update GITCACHE_TOKEN in your CI environment',
           `3. Ensure the token has access to organization: ${org}`,
         ].join('\n');
@@ -213,7 +213,7 @@ export class Setup extends BaseCommand {
         '❌ Interactive setup not available in CI',
         '',
         'Detected CI environment. Use CI token authentication instead:',
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/',
         '2. Set GITCACHE_TOKEN environment variable',
         '3. Run: gitcache setup --org <organization> --ci',
         '',
@@ -261,6 +261,11 @@ export class Setup extends BaseCommand {
         '',
         '🚀 Your gitcache install commands will now be accelerated!',
         '   Team members will automatically share cached dependencies',
+        '',
+        '💡 Next steps:',
+        '   • Generate CI tokens: gitcache tokens create <name>',
+        '   • List your tokens: gitcache tokens list',
+        '   • Check status: gitcache auth status',
       ].join('\n');
     } catch (error) {
       if (error instanceof Error && error.message.includes('SIGINT')) {
@@ -373,7 +378,8 @@ export class Setup extends BaseCommand {
   ): Promise<{ token: string }> {
     const apiUrl = this.getApiUrl();
 
-    const response = await fetch(`${apiUrl}/auth/login`, {
+    const response = await fetch(`${apiUrl}/auth/signin`, {
+      // Updated to use Cognito endpoint
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -381,8 +387,6 @@ export class Setup extends BaseCommand {
       body: JSON.stringify({
         email,
         password,
-        // Note: organization parameter may not be used in current auth implementation
-        // The user's organizationId is determined by their account
       }),
     });
 
@@ -394,7 +398,7 @@ export class Setup extends BaseCommand {
     }
 
     const result = await response.json();
-    return { token: result.token };
+    return { token: result.idToken }; // Use ID token from Cognito response
   }
 
   private storeAuthData(authData: AuthData): void {
@@ -411,6 +415,6 @@ export class Setup extends BaseCommand {
   }
 
   private getApiUrl(): string {
-    return process.env.GITCACHE_API_URL || 'https://gitcache.grata-labs.com';
+    return process.env.GITCACHE_API_URL || 'https://api.grata-labs.com';
   }
 }

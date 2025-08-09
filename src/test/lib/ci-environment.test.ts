@@ -232,7 +232,6 @@ describe('CI Environment Detection', () => {
       const message = getCIErrorMessage('quota_exceeded');
 
       expect(message).toContain('usage quota exceeded');
-      expect(message).toContain('billing');
       expect(message).toContain('Upgrade your plan');
     });
 

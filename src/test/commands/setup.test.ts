@@ -260,7 +260,7 @@ describe('Setup Command', () => {
       );
       expect(result).toContain('To enable GitCache acceleration:');
       expect(result).toContain(
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/'
       );
 
       consoleSpy.mockRestore();
@@ -284,7 +284,7 @@ describe('Setup Command', () => {
       );
       expect(result).toContain('To enable GitCache acceleration:');
       expect(result).toContain(
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/'
       );
 
       // Verify the error was logged (validateCIToken catches the error internally)
@@ -319,7 +319,7 @@ describe('Setup Command', () => {
       );
       expect(result).toContain('To enable GitCache acceleration:');
       expect(result).toContain(
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/'
       );
 
       // Verify the error was logged from the catch block
@@ -371,7 +371,7 @@ describe('Setup Command', () => {
       );
       expect(result).toContain('To enable GitCache acceleration:');
       expect(result).toContain(
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/'
       );
       expect(result).toContain(
         '2. Set GITCACHE_TOKEN environment variable in your CI configuration'
@@ -801,7 +801,7 @@ describe('Setup Command', () => {
         'Detected CI environment. Use CI token authentication instead:'
       );
       expect(result).toContain(
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens'
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/'
       );
       expect(result).toContain('2. Set GITCACHE_TOKEN environment variable');
       expect(result).toContain(
@@ -1063,7 +1063,7 @@ describe('Setup Command', () => {
       await setup.exec([], { org: 'testorg', ci: true });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/api/auth/validate-token',
+        'https://api.grata-labs.com/api/auth/validate-token',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({

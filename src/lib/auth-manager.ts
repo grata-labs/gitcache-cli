@@ -21,8 +21,16 @@ export class AuthManager {
 
   /**
    * Check if user is authenticated with a valid token
+   * Includes environment variable detection
    */
   isAuthenticated(): boolean {
+    // Check environment variable first (CI tokens)
+    const envToken = process.env.GITCACHE_TOKEN;
+    if (envToken && envToken.startsWith('ci_')) {
+      return true; // CI tokens are considered always valid
+    }
+
+    // Check stored authentication
     if (
       !this.authData ||
       !this.authData.token ||
@@ -45,22 +53,50 @@ export class AuthManager {
 
   /**
    * Get the current authentication token
+   * Priority: 1. Environment variable (CI), 2. Stored auth (user)
    */
   getAuthToken(): string | null {
+    // Priority 1: CI environment variable
+    const envToken = process.env.GITCACHE_TOKEN;
+    if (envToken && envToken.startsWith('ci_')) {
+      return envToken;
+    }
+
+    // Priority 2: Stored authentication
     return this.isAuthenticated() ? this.authData!.token : null;
   }
 
   /**
    * Get the current organization ID
+   * Priority: 1. Extract from CI token, 2. Stored auth
    */
   getOrgId(): string | null {
+    // Priority 1: Extract from CI token
+    const envToken = process.env.GITCACHE_TOKEN;
+    if (envToken && envToken.startsWith('ci_')) {
+      // Extract org from CI token format: ci_orgname_randomstring
+      const parts = envToken.split('_');
+      if (parts.length >= 3) {
+        return parts[1]; // Organization name is the second part
+      }
+    }
+
+    // Priority 2: Stored authentication
     return this.isAuthenticated() ? this.authData!.orgId : null;
   }
 
   /**
    * Get the token type (user or ci)
+   * Priority: 1. Environment variable (CI), 2. Stored auth
    */
   getTokenType(): 'user' | 'ci' | null {
+    // Priority 1: CI environment variable
+    const envToken = process.env.GITCACHE_TOKEN;
+    if (envToken && envToken.startsWith('ci_')) {
+      return 'ci';
+    }
+
+    // Priority 2: Stored authentication
     return this.isAuthenticated() ? this.authData!.tokenType : null;
   }
 
@@ -72,30 +108,39 @@ export class AuthManager {
       return false;
     }
 
+    const token = this.getAuthToken();
+    const tokenType = this.getTokenType();
+
+    if (!token) {
+      return false;
+    }
+
     try {
       const apiUrl = this.getApiUrl();
-      const response = await fetch(`${apiUrl}/auth/validate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.authData!.token}`,
-        },
-        body: JSON.stringify({
-          tokenType: this.authData!.tokenType,
-          orgId: this.authData!.orgId,
-        }),
-      });
 
-      if (!response.ok) {
-        // Token is invalid, clear it
-        this.authData = null;
-        return false;
+      // For CI tokens, validate via artifacts endpoint (no API Gateway auth)
+      if (tokenType === 'ci' || token.startsWith('ci_')) {
+        const response = await fetch(`${apiUrl}/artifacts/health`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const isValid = response.status !== 401;
+        if (!isValid) {
+          this.clearAuthData();
+        }
+        return isValid;
       }
 
-      return true;
+      // For user tokens, validate via dashboard API (Cognito auth)
+      const response = await fetch(`${apiUrl}/api/organizations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const isValid = response.status !== 401;
+      if (!isValid) {
+        this.clearAuthData();
+      }
+      return isValid;
     } catch {
-      // Network error - assume token is still valid
-      // We'll fail gracefully in the registry client
+      // Network error - assume token is still valid for graceful degradation
       return true;
     }
   }
@@ -155,9 +200,22 @@ export class AuthManager {
   }
 
   /**
+   * Clear auth data (for logout or failed validation)
+   */
+  private clearAuthData(): void {
+    this.authData = null;
+    this.storeAuthData({
+      token: '',
+      orgId: '',
+      tokenType: 'user',
+      expiresAt: null,
+    });
+  }
+
+  /**
    * Get the API URL from environment or default
    */
   private getApiUrl(): string {
-    return process.env.GITCACHE_API_URL || 'https://gitcache.grata-labs.com';
+    return process.env.GITCACHE_API_URL || 'https://api.grata-labs.com';
   }
 }

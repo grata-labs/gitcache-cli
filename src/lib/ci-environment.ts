@@ -82,7 +82,7 @@ export function getCIErrorMessage(
       '❌ GitCache authentication required in CI',
       '',
       'To enable GitCache acceleration in CI:',
-      '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+      '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/',
       '2. Add GITCACHE_TOKEN environment variable to your CI configuration',
       '',
       `Example for ${ciEnv.platform}:`,
@@ -99,7 +99,7 @@ export function getCIErrorMessage(
       'Your CI token may be expired or revoked.',
       '',
       'To fix:',
-      '1. Generate a new CI token at: https://gitcache.grata-labs.com/tokens',
+      '1. Generate a new CI token at: https://grata-labs.com/gitcache/account/dashboard/',
       '2. Update GITCACHE_TOKEN in your CI environment',
       '',
       'Builds will continue using Git sources without acceleration.',
@@ -125,7 +125,7 @@ export function getCIErrorMessage(
       'Your organization has reached its GitCache usage limit.',
       '',
       'To continue using GitCache acceleration:',
-      '1. Visit: https://gitcache.grata-labs.com/billing',
+      '1. Visit: https://grata-labs.com/gitcache/account/dashboard/',
       '2. Upgrade your plan or wait for quota reset',
       '',
       'Builds will continue using Git sources.',
@@ -142,7 +142,7 @@ export function getCIErrorMessage(
       'To fix:',
       `1. Verify the organization name is correct: ${orgId}`,
       '2. Ensure your CI token has access to this organization',
-      '3. Generate a new token if needed: https://gitcache.grata-labs.com/tokens',
+      '3. Generate a new token if needed: https://grata-labs.com/gitcache/account/dashboard/',
       '',
       'Builds will continue using Git sources without acceleration.',
     ].join('\n');
@@ -155,7 +155,7 @@ export function getCIErrorMessage(
     `Error: ${errorType}`,
     '',
     'Your build will continue using Git sources.',
-    'For support, visit: https://gitcache.grata-labs.com/support',
+    'For support, visit: https://grata-labs.com/gitcache/account/dashboard/',
   ].join('\n');
 }
 
