@@ -25,8 +25,8 @@ export const DEFAULT_REGISTRY_CONFIG: RegistryConfig = {
 /**
  * Registry client for interacting with GitCache cloud registry
  */
-import { AuthManager } from './auth-manager.js';
 import { createHash } from 'node:crypto';
+import { AuthManager } from './auth-manager.js';
 
 export class RegistryClient {
   private auth: AuthManager;
@@ -170,12 +170,12 @@ export class RegistryClient {
     }
 
     try {
-      const response = await this.makeRequest(
-        `/api/artifacts/${packageId}/exists`,
-        {
-          method: 'HEAD',
-        }
-      );
+      const encodedPackageId = encodeURIComponent(packageId);
+      const lookupUrl = `/artifacts/lookup/${encodedPackageId}`;
+
+      const response = await this.makeRequest(lookupUrl, {
+        method: 'GET',
+      });
 
       return response.ok;
     } catch (error) {
@@ -193,15 +193,70 @@ export class RegistryClient {
     }
 
     try {
-      const response = await this.makeRequest(`/artifacts/${packageId}`, {
-        method: 'GET',
-      });
+      // First, lookup the artifact to get its metadata
+      const lookupResponse = await this.makeRequest(
+        `/artifacts/lookup/${encodeURIComponent(packageId)}`,
+        {
+          method: 'GET',
+        }
+      );
 
-      if (!response.ok) {
-        throw new Error(`Registry download failed: ${response.status}`);
+      if (!lookupResponse.ok) {
+        throw new Error(`Artifact lookup failed: ${lookupResponse.status}`);
       }
 
-      const arrayBuffer = await response.arrayBuffer();
+      const artifactData = await lookupResponse.json();
+
+      // Extract artifact ID from the standard response structure
+      const artifactId = artifactData.data?.id;
+
+      if (!artifactId) {
+        throw new Error('No artifact ID found in lookup response');
+      }
+
+      // The API expects POST /artifacts/{id}/download with the ID in the path
+      const downloadUrlResponse = await this.makeRequest(
+        `/artifacts/${artifactId}/download`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}), // Empty body
+        }
+      );
+
+      if (!downloadUrlResponse.ok) {
+        const errorText = await downloadUrlResponse.text();
+
+        // Since the download endpoint seems to not be working correctly,
+        // let's check if we can construct a direct S3 URL from the artifact data
+        if (artifactData.data?.s3Key) {
+          throw new Error(
+            'Download endpoint not available. The artifact exists but cannot be downloaded due to API configuration issue.'
+          );
+        }
+
+        throw new Error(`Failed to get download URL: ${errorText}`);
+      }
+
+      const downloadData = await downloadUrlResponse.json();
+
+      // Extract download URL from the standard response structure
+      const downloadUrl = downloadData.data?.downloadUrl;
+
+      if (!downloadUrl) {
+        throw new Error('No download URL found in response');
+      }
+
+      // Download from S3
+      const s3Response = await fetch(downloadUrl);
+      if (!s3Response.ok) {
+        throw new Error(`S3 download failed: ${s3Response.status}`);
+      }
+
+      const arrayBuffer = await s3Response.arrayBuffer();
+
       return Buffer.from(arrayBuffer);
     } catch (error) {
       this.logVerbose(`Registry download failed for ${packageId}: ${error}`);
@@ -250,7 +305,7 @@ export class RegistryClient {
       // Upload the artifact directly to S3 using presigned URL
       const response = await fetch(uploadInfo.uploadUrl, {
         method: 'PUT',
-        body: data,
+        body: data as BodyInit,
         headers: {
           'Content-Type': 'application/gzip',
           'Content-Length': data.length.toString(),

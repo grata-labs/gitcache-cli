@@ -166,7 +166,9 @@ export class Install extends BaseCommand {
       }> = [];
 
       for (const dep of buildableDeps) {
-        const gitUrl = dep.preferredUrl.replace(/^git\+/, '');
+        // Clean the git URL by removing any existing hash fragments (version tags, etc.)
+        const rawGitUrl = dep.preferredUrl.replace(/^git\+/, '');
+        const cleanGitUrl = rawGitUrl.split('#')[0]; // Take only the base URL part
         const isExisting = this.isTarballCached(dep.resolvedSha!);
 
         if (isExisting) {
@@ -174,7 +176,7 @@ export class Install extends BaseCommand {
         } else {
           missingTarballs.push({
             name: dep.name,
-            gitUrl,
+            gitUrl: cleanGitUrl, // Use the cleaned URL
             commitSha: dep.resolvedSha!,
           });
         }
