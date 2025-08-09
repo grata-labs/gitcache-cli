@@ -171,7 +171,7 @@ export class RegistryClient {
 
     try {
       const response = await this.makeRequest(
-        `/artifacts/${packageId}/exists`,
+        `/api/artifacts/${packageId}/exists`,
         {
           method: 'HEAD',
         }
@@ -239,26 +239,38 @@ export class RegistryClient {
         sha256: this.calculateSHA256(data),
       });
 
-      // Upload the artifact
+      // If uploadUrl is empty, artifact already exists
+      if (!uploadInfo.uploadUrl || uploadInfo.uploadUrl === '') {
+        this.logVerbose(`Artifact ${packageId} already exists in registry`);
+        return;
+      }
+
+      this.logVerbose(`Uploading ${data.length} bytes to S3...`);
+
+      // Upload the artifact directly to S3 using presigned URL
       const response = await fetch(uploadInfo.uploadUrl, {
         method: 'PUT',
-        body: data as BodyInit,
+        body: data,
         headers: {
-          'Content-Type': 'application/octet-stream',
+          'Content-Type': 'application/gzip',
           'Content-Length': data.length.toString(),
+          // Remove the authorization header for S3 presigned URLs
         },
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        this.logVerbose(`S3 upload failed: ${response.status} - ${errorText}`);
+
         if (response.status === 413 || response.status === 429) {
           // Quota exceeded - handle gracefully
           this.logVerbose('Upload skipped: quota exceeded');
           return;
         }
-        throw new Error(`Upload failed: ${response.status}`);
+        throw new Error(`Upload failed: ${response.status} - ${errorText}`);
       }
 
-      this.logVerbose(`Successfully uploaded ${packageId}`);
+      this.logVerbose(`Successfully uploaded ${packageId} to S3`);
     } catch (error) {
       this.logVerbose(`Upload failed for ${packageId}: ${error}`);
       throw error;
@@ -291,22 +303,39 @@ export class RegistryClient {
     packageId: string,
     metadata: Record<string, unknown>
   ): Promise<UploadInfo> {
-    const response = await this.makeRequest(
-      `/artifacts/${packageId}/upload-url`,
-      {
-        method: 'POST',
-        body: JSON.stringify(metadata),
-      }
-    );
+    // Prepare the request body according to the API's UploadRequest interface
+    const requestBody = {
+      fileName: `${packageId}.tar.gz`,
+      contentType: 'application/gzip',
+      size: metadata.size,
+      hash: metadata.sha256,
+    };
+
+    const response = await this.makeRequest(`/artifacts`, {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
 
     if (!response.ok) {
+      const errorBody = await response.text();
+      this.logVerbose(`Upload URL request failed: ${errorBody}`);
       throw new Error(`Failed to get upload URL: ${response.status}`);
     }
 
     const result = await response.json();
+
+    // Backend returns: { success: true, data: { uploadUrl, artifactId } }
+    const data = result.data || result; // Handle both wrapped and direct responses
+    const uploadUrl = data.uploadUrl || '';
+    const artifactId = data.artifactId || packageId;
+
+    this.logVerbose(
+      `Got upload URL for ${artifactId}: ${uploadUrl ? 'Present' : 'Empty (already exists)'}`
+    );
+
     return {
-      uploadUrl: result.uploadUrl,
-      metadata: result.metadata || {},
+      uploadUrl,
+      metadata: { artifactId, ...data.metadata },
     };
   }
 

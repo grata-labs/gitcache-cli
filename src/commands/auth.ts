@@ -90,13 +90,25 @@ export class Auth extends BaseCommand {
         // Fallback to the org from auth result if fetching organizations fails
       }
 
+      // Extract expiration from JWT token
+      let expiresAt: number;
+      try {
+        const jwtPayload = JSON.parse(
+          Buffer.from(authResult.idToken.split('.')[1], 'base64').toString()
+        );
+        expiresAt = jwtPayload.exp * 1000; // Convert to milliseconds
+      } catch {
+        // Fallback to 1 hour if JWT parsing fails
+        expiresAt = Date.now() + 60 * 60 * 1000;
+      }
+
       // Store final auth data with correct organization
       this.authManager.storeAuthData({
         token: authResult.idToken,
         email,
         orgId: defaultOrgId,
         tokenType: 'user',
-        expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour (Cognito token)
+        expiresAt,
       });
 
       return [
