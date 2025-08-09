@@ -127,7 +127,7 @@ export class Setup extends BaseCommand {
       `Detected ${ciEnv.platform} environment but CI token is invalid.`,
       '',
       'To enable GitCache acceleration:',
-      '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+      '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/',
       '2. Set GITCACHE_TOKEN environment variable in your CI configuration',
       '',
       'Your builds will continue using Git sources without acceleration.',
@@ -148,7 +148,7 @@ export class Setup extends BaseCommand {
         `Detected ${ciEnv?.platform || 'CI'} environment but no GITCACHE_TOKEN found.`,
         '',
         'To enable GitCache acceleration:',
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/',
         '2. Set GITCACHE_TOKEN environment variable in your CI configuration',
         '',
         'Your builds will continue using Git sources without acceleration.',
@@ -160,7 +160,7 @@ export class Setup extends BaseCommand {
         '❌ Invalid CI token format',
         '',
         'CI tokens must start with "ci_"',
-        'Generate a new CI token at: https://gitcache.grata-labs.com/tokens',
+        'Generate a new CI token at: https://grata-labs.com/gitcache/account/dashboard/',
       ].join('\n');
     }
 
@@ -175,7 +175,7 @@ export class Setup extends BaseCommand {
           `Error: ${validation.error}`,
           '',
           'To fix:',
-          '1. Generate a new CI token at: https://gitcache.grata-labs.com/tokens',
+          '1. Generate a new CI token at: https://grata-labs.com/gitcache/account/dashboard/',
           '2. Update GITCACHE_TOKEN in your CI environment',
           `3. Ensure the token has access to organization: ${org}`,
         ].join('\n');
@@ -213,7 +213,7 @@ export class Setup extends BaseCommand {
         '❌ Interactive setup not available in CI',
         '',
         'Detected CI environment. Use CI token authentication instead:',
-        '1. Generate a CI token at: https://gitcache.grata-labs.com/tokens',
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/',
         '2. Set GITCACHE_TOKEN environment variable',
         '3. Run: gitcache setup --org <organization> --ci',
         '',

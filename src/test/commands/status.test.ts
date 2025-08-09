@@ -246,7 +246,7 @@ describe('Status Command', () => {
       expect(result).toContain('Status: Connected');
       expect(result).toContain('Organization: test-org');
       expect(result).toContain('Token type: User token');
-      expect(result).toContain('API endpoint: https://gitcache.grata-labs.com');
+      expect(result).toContain('API endpoint: https://api.grata-labs.com');
     });
 
     it('should handle CI token in detailed status', async () => {
@@ -673,7 +673,7 @@ describe('Status Command', () => {
       expect(result).toContain('Status: Connected');
       expect(result).toContain('Organization: test-org');
       expect(result).toContain('Token type: User token');
-      expect(result).toContain('API endpoint: https://gitcache.grata-labs.com');
+      expect(result).toContain('API endpoint: https://api.grata-labs.com');
     });
 
     it('should format disconnection reason correctly for different error types', async () => {

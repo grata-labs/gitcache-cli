@@ -336,7 +336,7 @@ export class Status extends BaseCommand {
 
       // Add API endpoint info
       const apiUrl =
-        process.env.GITCACHE_API_URL || 'https://gitcache.grata-labs.com';
+        process.env.GITCACHE_API_URL || 'https://api.grata-labs.com';
       lines.push(`  API endpoint: ${apiUrl}`);
     } else {
       lines.push('  Status: Not connected');
