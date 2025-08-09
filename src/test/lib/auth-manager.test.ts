@@ -259,17 +259,11 @@ describe('AuthManager', () => {
 
       expect(result).toBe(false);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/auth/validate',
+        'https://api.grata-labs.com/api/organizations',
         {
-          method: 'POST',
           headers: {
             Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            tokenType: 'user',
-            orgId: 'test-org',
-          }),
         }
       );
     });
@@ -295,17 +289,11 @@ describe('AuthManager', () => {
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/auth/validate',
+        'https://api.grata-labs.com/artifacts/health',
         {
-          method: 'POST',
           headers: {
             Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            tokenType: 'ci',
-            orgId: 'test-org',
-          }),
         }
       );
     });
@@ -351,8 +339,12 @@ describe('AuthManager', () => {
       await authManager.validateToken();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://custom-api.com/auth/validate',
-        expect.any(Object)
+        'https://custom-api.com/api/organizations',
+        {
+          headers: {
+            Authorization: 'Bearer valid-token',
+          },
+        }
       );
 
       delete process.env.GITCACHE_API_URL;
