@@ -101,6 +101,20 @@ export class AuthManager {
   }
 
   /**
+   * Get the current user's email address (only for user tokens)
+   */
+  getEmail(): string | null {
+    // CI tokens don't have email addresses
+    const tokenType = this.getTokenType();
+    if (tokenType === 'ci') {
+      return null;
+    }
+
+    // User tokens may have email stored
+    return this.isAuthenticated() ? this.authData?.email || null : null;
+  }
+
+  /**
    * Validate the current token with the registry
    */
   async validateToken(): Promise<boolean> {

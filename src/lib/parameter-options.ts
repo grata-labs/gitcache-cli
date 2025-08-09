@@ -74,6 +74,10 @@ export const PARAMETER_OPTIONS: Record<string, ParameterConfig> = {
     flags: '--token <token>',
     description: 'CI token for authentication',
   },
+  'list-orgs': {
+    flags: '--list-orgs',
+    description: 'list available organizations for the user',
+  },
   detailed: {
     flags: '--detailed',
     description: 'show detailed status information',

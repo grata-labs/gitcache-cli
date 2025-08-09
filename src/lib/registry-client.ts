@@ -124,6 +124,44 @@ export class RegistryClient {
   }
 
   /**
+   * List organizations the user has access to
+   */
+  async listOrganizations(): Promise<{
+    organizations: Array<{
+      id: string;
+      name: string;
+      isDefault: boolean;
+      role: string;
+    }>;
+    defaultOrganization?: string;
+  }> {
+    try {
+      const response = await this.makeRequest('/api/organizations', {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to list organizations: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Find the default organization (marked as isDefault or the first one)
+      const defaultOrg =
+        result.organizations?.find(
+          (org: { isDefault?: boolean; id: string }) => org.isDefault
+        )?.id || result.organizations?.[0]?.id;
+
+      return {
+        organizations: result.organizations,
+        defaultOrganization: defaultOrg,
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch organizations: ${String(error)}`);
+    }
+  }
+
+  /**
    * Check if an artifact exists in the registry
    */
   async has(packageId: string): Promise<boolean> {
@@ -204,7 +242,7 @@ export class RegistryClient {
       // Upload the artifact
       const response = await fetch(uploadInfo.uploadUrl, {
         method: 'PUT',
-        body: data,
+        body: data as BodyInit,
         headers: {
           'Content-Type': 'application/octet-stream',
           'Content-Length': data.length.toString(),

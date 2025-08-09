@@ -133,8 +133,157 @@ describe('Setup Command', () => {
   describe('exec', () => {
     it('should throw error when org parameter is missing', async () => {
       await expect(setup.exec([], {})).rejects.toThrow(
-        'Organization name is required. Use --org <organization>'
+        'Organization name is required. Use --org <organization> or --list-orgs to see available organizations'
       );
+    });
+
+    it('should handle --list-orgs when not authenticated', async () => {
+      const result = await setup.exec([], { 'list-orgs': true });
+
+      expect(result).toContain(
+        '❌ Authentication required to list organizations'
+      );
+      expect(result).toContain('Please login first:');
+      expect(result).toContain('gitcache auth login <your-email>');
+    });
+
+    it('should handle --list-orgs when authenticated with organizations', async () => {
+      // Mock authenticated state
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          isAuthenticated: () => true,
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                {
+                  id: 'org1',
+                  name: 'Organization 1',
+                  isDefault: true,
+                  role: 'admin',
+                },
+                {
+                  id: 'org2',
+                  name: 'Organization 2',
+                  isDefault: false,
+                  role: 'member',
+                },
+              ],
+              defaultOrganization: 'org1',
+            }),
+        });
+
+      const result = await setup.exec([], { 'list-orgs': true });
+
+      expect(result).toContain('📋 Your Organizations (2):');
+      expect(result).toContain(
+        '• Organization 1 (ID: org1) (admin) 🏠 API Default'
+      );
+      expect(result).toContain('• Organization 2 (ID: org2) (member)');
+      expect(result).toContain('💡 API default organization: org1');
+      expect(result).toContain('gitcache setup --org <org-id>');
+      expect(result).toContain(
+        'The org-id sets your organization context for all GitCache operations.'
+      );
+
+      registryClientSpy.mockRestore();
+    });
+
+    it('should handle --list-orgs when current organization context is set', async () => {
+      // Mock authenticated state
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          isAuthenticated: () => true,
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                {
+                  id: 'org1',
+                  name: 'Organization 1',
+                  isDefault: true,
+                  role: 'admin',
+                },
+                {
+                  id: 'current-org',
+                  name: 'Current Organization',
+                  isDefault: false,
+                  role: 'member',
+                },
+              ],
+              defaultOrganization: 'org1',
+            }),
+        });
+
+      // Mock AuthManager to return a specific current organization context
+      const { AuthManager } = await import('../../lib/auth-manager.js');
+      const authManagerSpy = vi
+        .spyOn(AuthManager.prototype, 'getOrgId')
+        .mockReturnValue('current-org');
+
+      const result = await setup.exec([], { 'list-orgs': true });
+
+      expect(result).toContain('📋 Your Organizations (2):');
+      expect(result).toContain(
+        '• Organization 1 (ID: org1) (admin) 🏠 API Default'
+      );
+      expect(result).toContain(
+        '• Current Organization (ID: current-org) (member) 🎯 Current Context'
+      );
+      expect(result).toContain(
+        '💡 Your current organization context: current-org'
+      );
+      expect(result).toContain('💡 API default organization: org1');
+      expect(result).toContain('gitcache setup --org <org-id>');
+
+      registryClientSpy.mockRestore();
+      authManagerSpy.mockRestore();
+    });
+
+    it('should handle --list-orgs when no organizations found', async () => {
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          isAuthenticated: () => true,
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [],
+              defaultOrganization: undefined,
+            }),
+        });
+
+      const result = await setup.exec([], { 'list-orgs': true });
+
+      expect(result).toContain('📝 No organizations found');
+      expect(result).toContain('You may need to:');
+      expect(result).toContain(
+        '• Contact your administrator for organization access'
+      );
+      expect(result).toContain(
+        '• Create an organization at: https://grata-labs.com/gitcache/account/'
+      );
+
+      registryClientSpy.mockRestore();
+    });
+
+    it('should handle --list-orgs when API fails', async () => {
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          isAuthenticated: () => true,
+          listOrganizations: () =>
+            Promise.reject(new Error('Network connection failed')),
+        });
+
+      const result = await setup.exec([], { 'list-orgs': true });
+
+      expect(result).toContain('❌ Failed to fetch organizations');
+      expect(result).toContain('Error: Network connection failed');
+      expect(result).toContain('Please verify:');
+      expect(result).toContain('• Your authentication is valid');
+      expect(result).toContain('• Network connectivity to GitCache');
+
+      registryClientSpy.mockRestore();
     });
 
     it('should detect CI environment from GitHub Actions', async () => {
@@ -637,7 +786,7 @@ describe('Setup Command', () => {
   });
 
   describe('Interactive mode', () => {
-    it('should handle user authentication success', async () => {
+    it('should handle user authentication success with default organization', async () => {
       // Ensure we're not in CI mode
       delete process.env.CI;
       delete process.env.GITHUB_ACTIONS;
@@ -654,15 +803,43 @@ describe('Setup Command', () => {
         'testpassword'
       );
 
+      // Mock console.log to capture org message
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock authentication API
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ token: 'user_token123' }),
       });
 
+      // Mock the registry client's listOrganizations method
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                { id: 'default-org', name: 'Default Org', isDefault: true },
+              ],
+              defaultOrganization: 'default-org',
+            }),
+        });
+
       const result = await setup.exec([], { org: 'testorg' });
 
       expect(result).toContain('✓ Connected to GitCache registry');
-      expect(result).toContain('✓ Team cache sharing enabled for testorg');
+      expect(result).toContain('✓ Team cache sharing enabled for default-org');
+      expect(result).toContain(
+        '• List organizations: gitcache setup --list-orgs'
+      );
+
+      // Verify that the default organization message was shown
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '💡 Setting organization context to your default: default-org'
+      );
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
     });
 
     it('should handle authentication failure', async () => {
@@ -1279,12 +1456,13 @@ describe('Setup Command', () => {
         'Setup GitCache registry access for team acceleration'
       );
       expect(Setup.commandName).toBe('setup');
-      expect(Setup.params).toEqual(['org', 'ci', 'token']);
+      expect(Setup.params).toEqual(['org', 'ci', 'token', 'list-orgs']);
       expect(Setup.argumentSpec).toEqual({ type: 'none' });
       expect(Setup.usage).toEqual([
         '--org <organization>',
         '--ci --org <organization>',
         '--ci --org <organization> --token <ci-token>',
+        '--list-orgs',
       ]);
     });
   });

@@ -48,6 +48,7 @@ describe('Auth Command', () => {
       isAuthenticated: vi.fn(),
       getTokenType: vi.fn(),
       getOrgId: vi.fn(),
+      getEmail: vi.fn(),
       storeAuthData: vi.fn(),
     };
 
@@ -145,14 +146,16 @@ describe('Auth Command', () => {
         mockAuthManagerInstance.isAuthenticated.mockReturnValue(true);
         mockAuthManagerInstance.getTokenType.mockReturnValue('user');
         mockAuthManagerInstance.getOrgId.mockReturnValue('test-org');
+        mockAuthManagerInstance.getEmail.mockReturnValue('test@example.com');
 
         const result = await authCommand.exec(['status']);
 
-        expect(result).toContain('✅ Authenticated with user account');
-        expect(result).toContain('🏢 Organization: test-org');
+        expect(result).toContain('✅ Authenticated as: test@example.com');
+        expect(result).toContain('🏢 Organization context: test-org');
         expect(result).toContain('🔑 Token type: User session');
         expect(result).toContain('gitcache tokens create <name>');
         expect(result).toContain('gitcache tokens list');
+        expect(result).toContain('gitcache setup --list-orgs');
       });
 
       it('should show authenticated status with CI token', async () => {
@@ -163,7 +166,7 @@ describe('Auth Command', () => {
         const result = await authCommand.exec(['status']);
 
         expect(result).toContain('✅ Authenticated with CI token');
-        expect(result).toContain('🏢 Organization: test-org');
+        expect(result).toContain('🏢 Organization context: test-org');
         expect(result).toContain('🔑 Token type: CI token');
         expect(result).toContain(
           'CI tokens are long-lived and perfect for automation'
@@ -224,6 +227,67 @@ describe('Auth Command', () => {
             }),
           }
         );
+
+        mockGetPasswordInput.mockRestore();
+      });
+
+      it('should successfully login and use default organization when available', async () => {
+        // Mock successful authentication response
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            idToken: 'mock-id-token',
+            accessToken: 'mock-access-token',
+            refreshToken: 'mock-refresh-token',
+            organizationId: 'auth-org',
+          }),
+        });
+
+        // Mock password input
+        const mockGetPasswordInput = vi
+          .spyOn(authCommand as any, 'getPasswordInput')
+          .mockResolvedValue('test-password');
+
+        // Mock RegistryClient import and listOrganizations method
+        const mockRegistryClient = {
+          listOrganizations: vi.fn().mockResolvedValue({
+            organizations: [
+              { id: 'auth-org', name: 'Auth Org', isDefault: false },
+              { id: 'default-org', name: 'Default Org', isDefault: true },
+            ],
+            defaultOrganization: 'default-org',
+          }),
+        };
+
+        const mockRegistryClientClass = vi
+          .fn()
+          .mockImplementation(() => mockRegistryClient);
+
+        // Mock the dynamic import
+        vi.doMock('../../lib/registry-client.js', () => ({
+          RegistryClient: mockRegistryClientClass,
+        }));
+
+        const result = await authCommand.exec(['login', 'test@example.com']);
+
+        expect(result).toContain('✅ Authentication successful!');
+        expect(result).toContain('📧 Logged in as: test@example.com');
+        expect(result).toContain('🏢 Organization: default-org (your default)');
+        expect(result).toContain(
+          'Create CI tokens: gitcache tokens create <name>'
+        );
+
+        // Should store auth data with the default organization, not the auth organization
+        expect(mockAuthManagerInstance.storeAuthData).toHaveBeenCalledWith({
+          token: 'mock-id-token',
+          email: 'test@example.com',
+          orgId: 'default-org', // Should use defaultOrganization
+          tokenType: 'user',
+          expiresAt: expect.any(Number),
+        });
+
+        // Should be called twice - once temporarily, once with final data
+        expect(mockAuthManagerInstance.storeAuthData).toHaveBeenCalledTimes(2);
 
         mockGetPasswordInput.mockRestore();
       });
@@ -397,12 +461,12 @@ describe('Auth Command', () => {
         const result = await authCommand.exec(['login', 'test@example.com']);
 
         expect(result).toContain('✅ Authentication successful!');
-        expect(result).toContain('🏢 Organization: default');
+        expect(result).toContain('🏢 Organization: unknown');
 
         expect(mockAuthManagerInstance.storeAuthData).toHaveBeenCalledWith({
           token: 'mock-id-token',
           email: 'test@example.com',
-          orgId: 'default',
+          orgId: 'unknown',
           tokenType: 'user',
           expiresAt: expect.any(Number),
         });
@@ -677,7 +741,7 @@ describe('Auth Command', () => {
         'password'
       );
 
-      expect(result.orgId).toBe('default');
+      expect(result.orgId).toBe('unknown');
     });
 
     it('should prefer organizationId over orgId', async () => {

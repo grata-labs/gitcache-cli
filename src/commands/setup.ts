@@ -14,6 +14,8 @@ export interface SetupOptions {
   org?: string;
   ci?: boolean;
   token?: string;
+  'list-orgs'?: boolean;
+  listOrgs?: boolean; // Commander.js converts --list-orgs to listOrgs
 }
 
 interface AuthData {
@@ -31,8 +33,9 @@ export class Setup extends BaseCommand {
     '--org <organization>',
     '--ci --org <organization>',
     '--ci --org <organization> --token <ci-token>',
+    '--list-orgs',
   ];
-  static params = ['org', 'ci', 'token'];
+  static params = ['org', 'ci', 'token', 'list-orgs'];
   static argumentSpec = { type: 'none' } as const;
 
   private _registryClient?: RegistryClient;
@@ -52,9 +55,14 @@ export class Setup extends BaseCommand {
   async exec(args: string[], opts: SetupOptions = {}): Promise<string> {
     const { org, ci, token } = opts;
 
+    // Handle --list-orgs subcommand (Commander.js converts --list-orgs to listOrgs)
+    if (opts['list-orgs'] || opts.listOrgs) {
+      return this.listOrganizations();
+    }
+
     if (!org) {
       throw this.usageError(
-        'Organization name is required. Use --org <organization>'
+        'Organization name is required. Use --org <organization> or --list-orgs to see available organizations'
       );
     }
 
@@ -101,6 +109,94 @@ export class Setup extends BaseCommand {
       return this.setupCI(org, token, ciEnv);
     } else {
       return this.setupInteractive(org);
+    }
+  }
+
+  private async listOrganizations(): Promise<string> {
+    if (!this.registryClient.isAuthenticated()) {
+      return [
+        '❌ Authentication required to list organizations',
+        '',
+        'Please login first:',
+        '  gitcache auth login <your-email>',
+        '',
+        'Or authenticate with setup:',
+        '  gitcache setup --org <organization>',
+      ].join('\n');
+    }
+
+    try {
+      console.log('🔍 Fetching your organizations...');
+      const result = await this.registryClient.listOrganizations();
+
+      if (result.organizations.length === 0) {
+        return [
+          '📝 No organizations found',
+          '',
+          'You may need to:',
+          '• Contact your administrator for organization access',
+          '• Create an organization at: https://grata-labs.com/gitcache/account/',
+        ].join('\n');
+      }
+
+      // Get current organization context from auth manager
+      const { AuthManager } = await import('../lib/auth-manager.js');
+      const authManager = new AuthManager();
+      const currentOrgContext = authManager.getOrgId();
+
+      const orgList = result.organizations
+        .map((org) => {
+          const role = ` (${org.role})`;
+          const defaultMarker = org.isDefault ? ' 🏠 API Default' : '';
+          const currentMarker =
+            org.id === currentOrgContext ? ' 🎯 Current Context' : '';
+          return `  • ${org.name} (ID: ${org.id})${role}${defaultMarker}${currentMarker}`;
+        })
+        .join('\n');
+
+      const contextInfo = [];
+      if (currentOrgContext && currentOrgContext !== 'unknown') {
+        contextInfo.push(
+          `\n💡 Your current organization context: ${currentOrgContext}`
+        );
+      } else {
+        contextInfo.push(
+          `\n⚠️  No organization context set. Use --org to set one.`
+        );
+      }
+      if (
+        result.defaultOrganization &&
+        result.defaultOrganization !== currentOrgContext
+      ) {
+        contextInfo.push(
+          `💡 API default organization: ${result.defaultOrganization}`
+        );
+      }
+
+      return [
+        `📋 Your Organizations (${result.organizations.length}):`,
+        '',
+        orgList,
+        ...contextInfo,
+        '',
+        '🔧 Usage:',
+        '  gitcache setup --org <org-id>',
+        '',
+        '💡 The org-id sets your organization context for all GitCache operations.',
+        '   🎯 = Currently configured organization context',
+        '   🏠 = API default organization for your account',
+      ].join('\n');
+    } catch (error) {
+      return [
+        '❌ Failed to fetch organizations',
+        '',
+        `Error: ${String(error)}`,
+        '',
+        'Please verify:',
+        '• Your authentication is valid',
+        '• Network connectivity to GitCache',
+        '• You have organization access permissions',
+      ].join('\n');
     }
   }
 
@@ -246,18 +342,35 @@ export class Setup extends BaseCommand {
       // Authenticate with API
       const authResult = await this.authenticateUser(email, password, org);
 
-      // Store user token
+      // Get user's organizations to determine default
+      let defaultOrgId = org;
+      try {
+        const orgsResult = await this.registryClient.listOrganizations();
+        if (orgsResult.defaultOrganization) {
+          defaultOrgId = orgsResult.defaultOrganization;
+          if (defaultOrgId !== org) {
+            console.log(
+              `💡 Setting organization context to your default: ${defaultOrgId}`
+            );
+          }
+        }
+      } catch {
+        // Fallback to provided org if fetching organizations fails
+        console.log(`💡 Setting organization context to: ${org}`);
+      }
+
+      // Store user token with the determined organization
       this.storeAuthData({
         token: authResult.token,
         email,
-        orgId: org,
+        orgId: defaultOrgId,
         tokenType: 'user',
         expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
       });
 
       return [
         '✓ Connected to GitCache registry',
-        `✓ Team cache sharing enabled for ${org}`,
+        `✓ Team cache sharing enabled for ${defaultOrgId}`,
         '',
         '🚀 Your gitcache install commands will now be accelerated!',
         '   Team members will automatically share cached dependencies',
@@ -266,6 +379,7 @@ export class Setup extends BaseCommand {
         '   • Generate CI tokens: gitcache tokens create <name>',
         '   • List your tokens: gitcache tokens list',
         '   • Check status: gitcache auth status',
+        '   • List organizations: gitcache setup --list-orgs',
       ].join('\n');
     } catch (error) {
       if (error instanceof Error && error.message.includes('SIGINT')) {

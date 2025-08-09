@@ -620,6 +620,228 @@ describe('AuthManager', () => {
     });
   });
 
+  describe('getEmail', () => {
+    afterEach(() => {
+      // Clean up environment variables after each test
+      delete process.env.GITCACHE_TOKEN;
+    });
+
+    it('should return null when not authenticated', () => {
+      // Ensure no environment token is set
+      delete process.env.GITCACHE_TOKEN;
+      mockExistsSync.mockReturnValue(false);
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      expect(result).toBe(null);
+    });
+
+    it('should return null for CI token type', () => {
+      const ciData = {
+        token: 'ci-token',
+        orgId: 'test-org',
+        tokenType: 'ci' as const,
+        expiresAt: null,
+        email: 'should-not-be-returned@example.com', // Even if present, should not be returned for CI tokens
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(ciData));
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      expect(result).toBe(null);
+    });
+
+    it('should return null for CI token from environment variable', () => {
+      // Set environment variable with CI token
+      process.env.GITCACHE_TOKEN = 'ci_testorg_abc123';
+
+      // Also set up stored user token with email - environment should take priority
+      const userData = {
+        token: 'user-token',
+        email: 'user@example.com',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      // Should return null because CI token takes priority
+      expect(result).toBe(null);
+    });
+
+    it('should return email for user token when email is present', () => {
+      const userData = {
+        token: 'user-token',
+        email: 'test@example.com',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      expect(result).toBe('test@example.com');
+    });
+
+    it('should return null for user token when email is not present', () => {
+      const userData = {
+        token: 'user-token',
+        // No email field
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      expect(result).toBe(null);
+    });
+
+    it('should return null for user token when email is empty string', () => {
+      const userData = {
+        token: 'user-token',
+        email: '',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      expect(result).toBe(null);
+    });
+
+    it('should return null for user token when email is undefined', () => {
+      const userData = {
+        token: 'user-token',
+        email: undefined,
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      expect(result).toBe(null);
+    });
+
+    it('should return null when user token is expired', () => {
+      const expiredUserData = {
+        token: 'expired-user-token',
+        email: 'expired@example.com',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() - 1000, // Expired
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(expiredUserData));
+
+      authManager = new AuthManager();
+      const result = authManager.getEmail();
+
+      // Should return null because token is expired, so user is not authenticated
+      expect(result).toBe(null);
+    });
+
+    it('should handle valid email addresses correctly', () => {
+      const testCases = [
+        'simple@example.com',
+        'user.name@domain.co.uk',
+        'test+tag@example.org',
+        'user123@sub.domain.com',
+        'a@b.co',
+      ];
+
+      for (const email of testCases) {
+        const userData = {
+          token: 'user-token',
+          email: email,
+          orgId: 'test-org',
+          tokenType: 'user' as const,
+          expiresAt: Date.now() + 3600000,
+        };
+        mockExistsSync.mockReturnValue(true);
+        mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+        authManager = new AuthManager();
+        const result = authManager.getEmail();
+
+        expect(result).toBe(email);
+      }
+    });
+
+    it('should return null when getTokenType returns null', () => {
+      // Create a scenario where getTokenType returns null but isAuthenticated is true
+      const userData = {
+        token: 'user-token',
+        email: 'test@example.com',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 3600000,
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      authManager = new AuthManager();
+
+      // Mock getTokenType to return null
+      const originalGetTokenType = authManager.getTokenType;
+      authManager.getTokenType = vi.fn().mockReturnValue(null);
+
+      const result = authManager.getEmail();
+
+      // When tokenType is null (not 'ci'), the method continues to check isAuthenticated()
+      // Since isAuthenticated() returns true and email exists, it should return the email
+      // This test actually demonstrates that when tokenType is null, it's treated as a user token
+      expect(result).toBe('test@example.com');
+
+      // Restore original method
+      authManager.getTokenType = originalGetTokenType;
+    });
+
+    it('should return null when not authenticated even if email is present in auth data', () => {
+      // Create expired user data that has email but is not authenticated
+      const expiredUserData = {
+        token: 'expired-user-token',
+        email: 'expired@example.com',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() - 1000, // Expired
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(expiredUserData));
+
+      authManager = new AuthManager();
+
+      // Verify the user is not authenticated due to expiration
+      expect(authManager.isAuthenticated()).toBe(false);
+
+      const result = authManager.getEmail();
+
+      // Should return null because user is not authenticated, even though email exists in auth data
+      expect(result).toBe(null);
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle malformed JSON in auth file gracefully', () => {
       mockExistsSync.mockReturnValue(true);

@@ -850,6 +850,143 @@ describe('RegistryClient', () => {
     });
   });
 
+  describe('listOrganizations', () => {
+    it('should list organizations successfully', async () => {
+      const mockResponse = {
+        organizations: [
+          {
+            id: 'org1',
+            name: 'Organization 1',
+            isDefault: true,
+            role: 'admin',
+          },
+          {
+            id: 'org2',
+            name: 'Organization 2',
+            isDefault: false,
+            role: 'member',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(mockResponse),
+      });
+
+      const result = await registryClient.listOrganizations();
+
+      expect(result).toEqual({
+        organizations: mockResponse.organizations,
+        defaultOrganization: 'org1',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.grata-labs.com/api/organizations',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
+          }),
+        })
+      );
+    });
+
+    it('should throw error when response is not ok', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+      });
+
+      await expect(registryClient.listOrganizations()).rejects.toThrow(
+        'Failed to list organizations: 404'
+      );
+    });
+
+    it('should handle server errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+      });
+
+      await expect(registryClient.listOrganizations()).rejects.toThrow(
+        'Failed to list organizations: 500'
+      );
+    });
+
+    it('should handle unauthorized errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 401,
+      });
+
+      await expect(registryClient.listOrganizations()).rejects.toThrow(
+        'Failed to list organizations: 401'
+      );
+    });
+
+    it('should handle network errors', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'));
+
+      await expect(registryClient.listOrganizations()).rejects.toThrow(
+        'Failed to fetch organizations: Error: Network error'
+      );
+    });
+
+    it('should use first organization as default when none marked as default', async () => {
+      const mockResponse = {
+        organizations: [
+          {
+            id: 'org1',
+            name: 'Organization 1',
+            isDefault: false,
+            role: 'admin',
+          },
+          {
+            id: 'org2',
+            name: 'Organization 2',
+            isDefault: false,
+            role: 'member',
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(mockResponse),
+      });
+
+      const result = await registryClient.listOrganizations();
+
+      expect(result).toEqual({
+        organizations: mockResponse.organizations,
+        defaultOrganization: 'org1',
+      });
+    });
+
+    it('should handle empty organizations list', async () => {
+      const mockResponse = {
+        organizations: [],
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(mockResponse),
+      });
+
+      const result = await registryClient.listOrganizations();
+
+      expect(result).toEqual({
+        organizations: [],
+        defaultOrganization: undefined,
+      });
+    });
+  });
+
   describe('error handling and edge cases', () => {
     it('should handle JSON parsing errors gracefully', async () => {
       mockFetch.mockResolvedValue({
