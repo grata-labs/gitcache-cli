@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegistryClient } from '../../lib/registry-client.js';
 
 // Mock dependencies
@@ -102,12 +102,14 @@ describe('RegistryClient', () => {
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.grata-labs.com/artifacts/test-package-id/exists',
+        'https://api.grata-labs.com/artifacts/lookup/test-package-id',
         expect.objectContaining({
-          method: 'HEAD',
+          method: 'GET',
           headers: expect.objectContaining({
             Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
           }),
+          signal: expect.any(AbortSignal),
         })
       );
     });
@@ -145,22 +147,68 @@ describe('RegistryClient', () => {
   describe('get', () => {
     it('should download artifact successfully', async () => {
       const mockArrayBuffer = new ArrayBuffer(8);
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
-      });
+
+      // Mock the lookup response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            id: 'artifact-123',
+            data: { id: 'artifact-123' },
+          }),
+        })
+        // Mock the download URL response
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              downloadUrl: 'https://s3.example.com/download-url',
+              artifactId: 'artifact-123',
+              name: 'test-package',
+              size: 1024,
+              hash: 'abc123',
+            },
+          }),
+        })
+        // Mock the S3 download response
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
+        });
 
       const result = await registryClient.get('test-package-id');
 
       expect(result).toBeInstanceOf(Buffer);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.grata-labs.com/artifacts/test-package-id',
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      // Check the lookup call
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.grata-labs.com/artifacts/lookup/test-package-id',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
             Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
           }),
+        })
+      );
+
+      // Check the download URL call
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.grata-labs.com/artifacts/artifact-123/download',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({}),
         })
       );
     });
@@ -172,7 +220,7 @@ describe('RegistryClient', () => {
       });
 
       await expect(registryClient.get('test-package-id')).rejects.toThrow(
-        'Registry download failed: 404'
+        'Artifact lookup failed: 404'
       );
     });
 
@@ -191,6 +239,156 @@ describe('RegistryClient', () => {
       await expect(registryClient.get('test-package-id')).rejects.toThrow(
         'Network error'
       );
+    });
+
+    it('should throw error when S3 download fails', async () => {
+      // Mock the lookup response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            id: 'artifact-123',
+            data: { id: 'artifact-123' },
+          }),
+        })
+        // Mock the download URL response
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              downloadUrl: 'https://s3.example.com/download-url',
+              artifactId: 'artifact-123',
+            },
+          }),
+        })
+        // Mock the S3 download response with failure
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+        });
+
+      await expect(registryClient.get('test-package-id')).rejects.toThrow(
+        'S3 download failed: 403'
+      );
+
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('should throw error when no download URL found in response', async () => {
+      // Mock the lookup response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            id: 'artifact-123',
+            data: { id: 'artifact-123' },
+          }),
+        })
+        // Mock the download URL response without downloadUrl
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              artifactId: 'artifact-123',
+              name: 'test-package',
+              size: 1024,
+              hash: 'abc123',
+              // Note: no downloadUrl field
+            },
+          }),
+        });
+
+      await expect(registryClient.get('test-package-id')).rejects.toThrow(
+        'No download URL found in response'
+      );
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw error when no artifact ID found in lookup response', async () => {
+      // Mock the lookup response without artifact ID
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            // Note: no id field
+            name: 'test-package',
+            size: 1024,
+            hash: 'abc123',
+          },
+        }),
+      });
+
+      await expect(registryClient.get('test-package-id')).rejects.toThrow(
+        'No artifact ID found in lookup response'
+      );
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw error when download URL request fails without s3Key', async () => {
+      // Mock the lookup response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              id: 'artifact-123',
+              name: 'test-package',
+            },
+          }),
+        })
+        // Mock the download URL response with failure
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: vi.fn().mockResolvedValue('Internal server error'),
+        });
+
+      await expect(registryClient.get('test-package-id')).rejects.toThrow(
+        'Failed to get download URL: Internal server error'
+      );
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw special error when download URL request fails but artifact has s3Key', async () => {
+      // Mock the lookup response with s3Key
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              id: 'artifact-123',
+              name: 'test-package',
+              s3Key: 'artifacts/artifact-123.tar.gz',
+            },
+          }),
+        })
+        // Mock the download URL response with failure
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          text: vi.fn().mockResolvedValue('Endpoint not found'),
+        });
+
+      await expect(registryClient.get('test-package-id')).rejects.toThrow(
+        'Download endpoint not available. The artifact exists but cannot be downloaded due to API configuration issue.'
+      );
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -213,14 +411,19 @@ describe('RegistryClient', () => {
           ok: true,
           status: 200,
           json: vi.fn().mockResolvedValue({
-            uploadUrl: 'https://upload.example.com/presigned-url',
-            metadata: { id: 'test-package-id' },
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              artifactId: 'test-package-id',
+              metadata: {},
+            },
           }),
         })
         // Mock actual upload response
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
+          text: vi.fn().mockResolvedValue('Success'),
         });
 
       await registryClient.upload('test-package-id', mockBuffer);
@@ -230,12 +433,18 @@ describe('RegistryClient', () => {
       // First call should be to get upload URL
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
-        'https://api.grata-labs.com/artifacts/test-package-id/upload-url',
+        'https://api.grata-labs.com/artifacts',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
             Authorization: 'Bearer test-token',
             'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({
+            fileName: 'test-package-id.tar.gz',
+            contentType: 'application/gzip',
+            size: mockBuffer.length,
+            hash: mockHash,
           }),
         })
       );
@@ -248,7 +457,8 @@ describe('RegistryClient', () => {
           method: 'PUT',
           body: mockBuffer,
           headers: expect.objectContaining({
-            'Content-Type': 'application/octet-stream',
+            'Content-Type': 'application/gzip',
+            'Content-Length': mockBuffer.length.toString(),
           }),
         })
       );
@@ -261,14 +471,19 @@ describe('RegistryClient', () => {
           ok: true,
           status: 200,
           json: vi.fn().mockResolvedValue({
-            uploadUrl: 'https://upload.example.com/presigned-url',
-            metadata: { id: 'test-package-id' },
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              artifactId: 'test-package-id',
+              metadata: {},
+            },
           }),
         })
         // Mock upload response with quota exceeded
         .mockResolvedValueOnce({
           ok: false,
           status: 413,
+          text: vi.fn().mockResolvedValue('Quota exceeded'),
         });
 
       // Should not throw error for quota exceeded
@@ -284,14 +499,19 @@ describe('RegistryClient', () => {
           ok: true,
           status: 200,
           json: vi.fn().mockResolvedValue({
-            uploadUrl: 'https://upload.example.com/presigned-url',
-            metadata: { id: 'test-package-id' },
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              artifactId: 'test-package-id',
+              metadata: {},
+            },
           }),
         })
         // Mock upload response with rate limiting
         .mockResolvedValueOnce({
           ok: false,
           status: 429,
+          text: vi.fn().mockResolvedValue('Rate limited'),
         });
 
       // Should not throw error for rate limiting
@@ -307,19 +527,24 @@ describe('RegistryClient', () => {
           ok: true,
           status: 200,
           json: vi.fn().mockResolvedValue({
-            uploadUrl: 'https://upload.example.com/presigned-url',
-            metadata: { id: 'test-package-id' },
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              artifactId: 'test-package-id',
+              metadata: {},
+            },
           }),
         })
         // Mock upload response with server error
         .mockResolvedValueOnce({
           ok: false,
           status: 500,
+          text: vi.fn().mockResolvedValue('Internal server error'),
         });
 
       await expect(
         registryClient.upload('test-package-id', mockBuffer)
-      ).rejects.toThrow('Upload failed: 500');
+      ).rejects.toThrow('Upload failed: 500 - Internal server error');
     });
 
     it('should skip upload when not authenticated', async () => {
@@ -345,11 +570,74 @@ describe('RegistryClient', () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
+        text: vi.fn().mockResolvedValue('Server error'),
       });
 
       await expect(
         registryClient.upload('test-package-id', mockBuffer)
       ).rejects.toThrow('Failed to get upload URL: 500');
+    });
+
+    it('should skip upload when artifact already exists and log appropriate message', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const client = new RegistryClient({ verboseLogging: true });
+
+      // Mock getUploadUrl response with empty uploadUrl (indicating artifact exists)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            uploadUrl: '', // Empty URL indicates artifact already exists
+            artifactId: 'test-package-id',
+            metadata: {},
+          },
+        }),
+      });
+
+      await client.upload('test-package-id', mockBuffer);
+
+      // Should only call fetch once (for getUploadUrl), not for actual upload
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Should log the "already exists" message
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[GitCache Registry] Artifact test-package-id already exists in registry'
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should skip upload when artifact already exists (null uploadUrl) and log appropriate message', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const client = new RegistryClient({ verboseLogging: true });
+
+      // Mock getUploadUrl response with null uploadUrl
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            uploadUrl: null, // Null URL also indicates artifact already exists
+            artifactId: 'test-package-id',
+            metadata: {},
+          },
+        }),
+      });
+
+      await client.upload('test-package-id', mockBuffer);
+
+      // Should only call fetch once (for getUploadUrl), not for actual upload
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Should log the "already exists" message
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[GitCache Registry] Artifact test-package-id already exists in registry'
+      );
+
+      consoleSpy.mockRestore();
     });
   });
 
@@ -372,14 +660,19 @@ describe('RegistryClient', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            uploadUrl: 'https://upload.example.com/presigned-url',
-            metadata: { id: 'test-package-id' },
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              artifactId: 'test-package-id',
+              metadata: {},
+            },
           }),
       };
 
-      mockFetch
-        .mockResolvedValueOnce(mockResponse)
-        .mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(mockResponse).mockResolvedValueOnce({
+        ok: true,
+        text: vi.fn().mockResolvedValue('Success'),
+      });
 
       await client.uploadAsync('test-package-id', testData);
 
@@ -408,14 +701,19 @@ describe('RegistryClient', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            uploadUrl: 'https://upload.example.com/presigned-url',
-            metadata: { id: 'test-package-id' },
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              artifactId: 'test-package-id',
+              metadata: {},
+            },
           }),
       };
 
-      mockFetch
-        .mockResolvedValueOnce(mockResponse)
-        .mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce(mockResponse).mockResolvedValueOnce({
+        ok: true,
+        text: vi.fn().mockResolvedValue('Success'),
+      });
 
       // Call uploadAsync and don't await the background upload
       await client.uploadAsync('test-package-id', testData);
@@ -523,8 +821,12 @@ describe('RegistryClient', () => {
   describe('getUploadUrl', () => {
     it('should get upload URL successfully', async () => {
       const mockResponse = {
-        uploadUrl: 'https://upload.example.com/presigned-url',
-        metadata: { id: 'test-package' },
+        success: true,
+        data: {
+          uploadUrl: 'https://upload.example.com/presigned-url',
+          artifactId: 'test-package',
+          metadata: {},
+        },
       };
 
       mockFetch.mockResolvedValue({
@@ -538,9 +840,12 @@ describe('RegistryClient', () => {
         sha256: 'test-hash',
       });
 
-      expect(result).toEqual(mockResponse);
+      expect(result).toEqual({
+        uploadUrl: 'https://upload.example.com/presigned-url',
+        metadata: { artifactId: 'test-package' },
+      });
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.grata-labs.com/artifacts/test-package/upload-url',
+        'https://api.grata-labs.com/artifacts',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -548,8 +853,10 @@ describe('RegistryClient', () => {
             Authorization: 'Bearer test-token',
           }),
           body: JSON.stringify({
+            fileName: 'test-package.tar.gz',
+            contentType: 'application/gzip',
             size: 1024,
-            sha256: 'test-hash',
+            hash: 'test-hash',
           }),
         })
       );
@@ -559,6 +866,7 @@ describe('RegistryClient', () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
+        text: vi.fn().mockResolvedValue('Server error'),
       });
 
       await expect(
@@ -570,29 +878,109 @@ describe('RegistryClient', () => {
     });
 
     it('should handle missing metadata in upload URL response', async () => {
-      const client = new RegistryClient();
-      mockAuthManager.getAuthToken.mockReturnValue('test-token');
-
-      // Mock response without metadata field
-      const mockResponse = {
+      mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
             uploadUrl: 'https://upload.example.com/presigned-url',
-            // Note: no metadata field in response
-          }),
-      };
+            artifactId: 'test-package-id',
+            // metadata is missing
+          },
+        }),
+      });
 
-      mockFetch.mockResolvedValue(mockResponse);
-
-      const result = await client.getUploadUrl('test-package', {
+      const result = await registryClient.getUploadUrl('test-package-id', {
         size: 1024,
         sha256: 'test-hash',
       });
 
       expect(result).toEqual({
         uploadUrl: 'https://upload.example.com/presigned-url',
-        metadata: {}, // Should fallback to empty object
+        metadata: { artifactId: 'test-package-id' },
+      });
+    });
+
+    it('should handle direct response format (no data wrapper)', async () => {
+      // Test the fallback: result.data || result
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          // Direct response without data wrapper
+          uploadUrl: 'https://upload.example.com/presigned-url',
+          artifactId: 'test-package-id',
+          metadata: { custom: 'value' },
+        }),
+      });
+
+      const result = await registryClient.getUploadUrl('test-package-id', {
+        size: 1024,
+        sha256: 'test-hash',
+      });
+
+      expect(result).toEqual({
+        uploadUrl: 'https://upload.example.com/presigned-url',
+        metadata: {
+          artifactId: 'test-package-id',
+          custom: 'value',
+        },
+      });
+    });
+
+    it('should fallback to packageId when artifactId is missing', async () => {
+      // Test the fallback: data.artifactId || packageId
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            uploadUrl: 'https://upload.example.com/presigned-url',
+            // artifactId is missing
+            metadata: { custom: 'value' },
+          },
+        }),
+      });
+
+      const result = await registryClient.getUploadUrl('fallback-package-id', {
+        size: 1024,
+        sha256: 'test-hash',
+      });
+
+      expect(result).toEqual({
+        uploadUrl: 'https://upload.example.com/presigned-url',
+        metadata: {
+          artifactId: 'fallback-package-id', // Should use packageId as fallback
+          custom: 'value',
+        },
+      });
+    });
+
+    it('should fallback to empty string when uploadUrl is null', async () => {
+      // Test the fallback: data.uploadUrl || ''
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            uploadUrl: null, // Explicitly null
+            artifactId: 'test-package-id',
+            metadata: {},
+          },
+        }),
+      });
+
+      const result = await registryClient.getUploadUrl('test-package-id', {
+        size: 1024,
+        sha256: 'test-hash',
+      });
+
+      expect(result).toEqual({
+        uploadUrl: '', // Should fallback to empty string
+        metadata: { artifactId: 'test-package-id' },
       });
     });
   });
