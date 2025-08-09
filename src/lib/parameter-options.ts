@@ -78,6 +78,22 @@ export const PARAMETER_OPTIONS: Record<string, ParameterConfig> = {
     flags: '--detailed',
     description: 'show detailed status information',
   },
+  logout: {
+    flags: '--logout',
+    description: 'log out from GitCache',
+  },
+  status: {
+    flags: '--status',
+    description: 'show authentication status',
+  },
+  help: {
+    flags: '--help',
+    description: 'show help information',
+  },
+  'show-revoked': {
+    flags: '--show-revoked',
+    description: 'show revoked tokens in the list',
+  },
 };
 
 /**

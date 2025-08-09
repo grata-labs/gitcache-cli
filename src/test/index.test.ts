@@ -307,7 +307,7 @@ describe('gitcache CLI', () => {
       // Verify aliases are shown in verbose mode
       expect(mockProgram.addHelpText).toHaveBeenCalledWith(
         'after',
-        '\nAliases:\n  cache -> add\n  i -> install\n\nUse --verbose to see aliases in help output.'
+        '\nAliases:\n  cache -> add\n  i -> install\n  login -> auth\n\nUse --verbose to see aliases in help output.'
       );
 
       // Restore original argv

@@ -261,6 +261,11 @@ export class Setup extends BaseCommand {
         '',
         '🚀 Your gitcache install commands will now be accelerated!',
         '   Team members will automatically share cached dependencies',
+        '',
+        '💡 Next steps:',
+        '   • Generate CI tokens: gitcache tokens create <name>',
+        '   • List your tokens: gitcache tokens list',
+        '   • Check status: gitcache auth status',
       ].join('\n');
     } catch (error) {
       if (error instanceof Error && error.message.includes('SIGINT')) {
@@ -373,7 +378,8 @@ export class Setup extends BaseCommand {
   ): Promise<{ token: string }> {
     const apiUrl = this.getApiUrl();
 
-    const response = await fetch(`${apiUrl}/auth/login`, {
+    const response = await fetch(`${apiUrl}/auth/signin`, {
+      // Updated to use Cognito endpoint
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -381,8 +387,6 @@ export class Setup extends BaseCommand {
       body: JSON.stringify({
         email,
         password,
-        // Note: organization parameter may not be used in current auth implementation
-        // The user's organizationId is determined by their account
       }),
     });
 
@@ -394,7 +398,7 @@ export class Setup extends BaseCommand {
     }
 
     const result = await response.json();
-    return { token: result.token };
+    return { token: result.idToken }; // Use ID token from Cognito response
   }
 
   private storeAuthData(authData: AuthData): void {
@@ -411,6 +415,6 @@ export class Setup extends BaseCommand {
   }
 
   private getApiUrl(): string {
-    return process.env.GITCACHE_API_URL || 'https://gitcache.grata-labs.com';
+    return process.env.GITCACHE_API_URL || 'https://api.grata-labs.com';
   }
 }
