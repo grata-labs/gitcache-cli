@@ -295,7 +295,7 @@ export class Analyze extends BaseCommand {
       estimatedSpeedup: `${percentage}% of dependencies cached`,
       potential:
         uncached > 0
-          ? `${uncached} dependencies will be cached after running 'gitcache prepare'`
+          ? `${uncached} dependencies will be cached automatically on next install`
           : `${failed} dependencies could not be resolved`,
     };
   }
@@ -310,7 +310,7 @@ export class Analyze extends BaseCommand {
 
     if (uncached > 0) {
       recommendations.push(
-        `Run 'gitcache prepare' to pre-build ${uncached} missing tarballs`
+        `${uncached} missing tarballs will be built automatically on next install`
       );
     }
 
@@ -328,7 +328,7 @@ export class Analyze extends BaseCommand {
 
     if (hitRate < 0.5 && uncached > 0) {
       recommendations.push(
-        'Cache hit rate is low - consider running `gitcache prepare` before installs to improve performance'
+        'Cache hit rate is low - tarballs will be built automatically on next install to improve performance'
       );
     }
 

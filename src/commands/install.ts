@@ -76,7 +76,7 @@ export class Install extends BaseCommand {
         }
       }
 
-      // Automatically prepare Git dependencies before install
+      // Automatically build tarballs for Git dependencies before install
       await this.prepareGitDependencies();
 
       // Show cache hierarchy status if authenticated
@@ -116,7 +116,7 @@ export class Install extends BaseCommand {
   }
 
   /**
-   * Automatically scan lockfile and prepare missing tarballs before install
+   * Automatically scan lockfile and build missing tarballs before install
    */
   private async prepareGitDependencies(): Promise<void> {
     try {

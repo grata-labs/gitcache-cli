@@ -6,7 +6,6 @@
  * with team-shared GitCache proxies.
  */
 
-export { addRepository, cacheRepository } from './lib/api.js';
 export { main } from './lib/cli.js';
 
 // Only run CLI if this file is executed directly
