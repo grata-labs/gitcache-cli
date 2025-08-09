@@ -111,9 +111,6 @@ npm install -g @grata-labs/gitcache-cli
 # Analyze your project's Git dependencies
 gitcache scan
 
-# Pre-build and cache tarballs (optional - install does this automatically)
-gitcache prepare
-
 # Install using GitCache - first run builds cache, subsequent runs are fast
 gitcache install
 
@@ -124,12 +121,6 @@ gitcache i
 ### Advanced Commands
 
 ```bash
-# Manually add a specific repository to cache
-gitcache add https://github.com/user/repo.git
-
-# Force overwrite existing cache entry
-gitcache add https://github.com/user/repo.git --force
-
 # View detailed analysis of lockfile and cache status
 gitcache analyze
 
@@ -144,10 +135,8 @@ gitcache config --help
 
 | Command             | Aliases | Description                                                   |
 | ------------------- | ------- | ------------------------------------------------------------- |
-| `add <repo>`        | `cache` | Mirror a repository into your local cache                     |
 | `install [args...]` | `i`     | Run npm install using gitcache as the npm cache               |
 | `scan`              |         | Scan lockfile for Git dependencies                            |
-| `prepare`           |         | Pre-build tarballs for Git dependencies from lockfile         |
 | `analyze`           |         | Show detailed lockfile analysis and cache status              |
 | `prune`             |         | Prune old cache entries to free disk space using LRU strategy |
 | `config`            |         | Manage gitcache configuration                                 |
@@ -224,14 +213,14 @@ gitcache prune    # Free space using LRU strategy
 **Issue**: Build failures for specific repositories
 
 ```bash
-# Solution: Clear and rebuild specific repo cache
-gitcache add <repo-url> --force
-gitcache prepare
+# Solution: Clear cache and reinstall
+gitcache prune
+gitcache install
 ```
 
 ### Performance Tips
 
-1. **Pre-build on CI**: Run `gitcache prepare` in your CI pipeline to warm the cache
+1. **Pre-install**: GitCache automatically builds tarballs on first use
 2. **Share cache**: Use network storage for `~/.gitcache/` in team environments
 3. **Monitor size**: Regularly check `gitcache analyze` to manage disk usage
 4. **Clean installs**: Use `gitcache install` instead of `npm ci` for Git dependencies
@@ -286,7 +275,7 @@ DEBUG=gitcache* gitcache install
 ## Roadmap
 
 - ✅ **Local cache** — mirror repos to `~/.gitcache`
-- ✅ **Lockfile integration** — scan, prepare, and analyze Git dependencies
+- ✅ **Lockfile integration** — scan and analyze Git dependencies
 - ✅ **Optimized installs** — tarball caching with LRU pruning
 - ✅ **Cross-platform support** — macOS, Windows, Ubuntu with CI integration
 - ⏳ **Team cache** — push mirrors to S3-backed GitCache proxy
