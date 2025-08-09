@@ -102,7 +102,7 @@ describe('RegistryClient', () => {
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/artifacts/test-package-id/exists',
+        'https://api.grata-labs.com/artifacts/test-package-id/exists',
         expect.objectContaining({
           method: 'HEAD',
           headers: expect.objectContaining({
@@ -155,7 +155,7 @@ describe('RegistryClient', () => {
 
       expect(result).toBeInstanceOf(Buffer);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/artifacts/test-package-id',
+        'https://api.grata-labs.com/artifacts/test-package-id',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -230,7 +230,7 @@ describe('RegistryClient', () => {
       // First call should be to get upload URL
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
-        'https://gitcache.grata-labs.com/artifacts/test-package-id/upload-url',
+        'https://api.grata-labs.com/artifacts/test-package-id/upload-url',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -479,7 +479,7 @@ describe('RegistryClient', () => {
 
       expect(result).toBe('https://download.example.com/artifact');
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/artifacts/test-package-id/download-url',
+        'https://api.grata-labs.com/artifacts/test-package-id/download-url',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -540,7 +540,7 @@ describe('RegistryClient', () => {
 
       expect(result).toEqual(mockResponse);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/artifacts/test-package/upload-url',
+        'https://api.grata-labs.com/artifacts/test-package/upload-url',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -610,7 +610,7 @@ describe('RegistryClient', () => {
 
       expect(response).toBeDefined();
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/test-endpoint',
+        'https://api.grata-labs.com/test-endpoint',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -773,7 +773,7 @@ describe('RegistryClient', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gitcache.grata-labs.com/api/auth/validate-token',
+        'https://api.grata-labs.com/api/auth/validate-token',
         {
           method: 'POST',
           headers: {

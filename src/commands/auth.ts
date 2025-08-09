@@ -88,7 +88,7 @@ export class Auth extends BaseCommand {
       return [
         '❌ Authentication failed',
         '',
-        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error: ${String(error)}`,
         '',
         'Please verify:',
         '• Email and password are correct',

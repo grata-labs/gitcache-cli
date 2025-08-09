@@ -15,7 +15,7 @@ export interface UploadInfo {
  * Default registry configuration
  */
 export const DEFAULT_REGISTRY_CONFIG: RegistryConfig = {
-  apiUrl: process.env.GITCACHE_API_URL || 'https://gitcache.grata-labs.com',
+  apiUrl: process.env.GITCACHE_API_URL || 'https://api.grata-labs.com',
   timeout: 5000, // 5 second timeout
   retryAttempts: 2,
   uploadInBackground: true,

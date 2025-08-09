@@ -10,7 +10,6 @@ interface Token {
   id: string;
   name: string;
   value?: string;
-  token?: string;
   prefix?: string;
   isActive?: boolean;
   revoked?: boolean;
@@ -60,34 +59,36 @@ export class Tokens extends BaseCommand {
       ].join('\n');
     }
 
-    switch (subcommand) {
-      case 'create':
-        const [name] = subArgs;
-        if (!name) {
-          throw this.usageError(
-            'Token name is required: gitcache tokens create <name>'
-          );
-        }
-        return this.createToken(name);
-
-      case 'list':
-        return this.listTokens(opts);
-
-      case 'revoke':
-        const [tokenId] = subArgs;
-        if (!tokenId) {
-          throw this.usageError(
-            'Token ID is required: gitcache tokens revoke <token-id>'
-          );
-        }
-        return this.revokeToken(tokenId);
-
-      default:
-        if (!subcommand) {
-          return this.listTokens(opts); // Default action
-        }
-        throw this.usageError(`Unknown tokens command: ${subcommand}`);
+    if (subcommand === 'create') {
+      const [name] = subArgs;
+      if (!name) {
+        throw this.usageError(
+          'Token name is required: gitcache tokens create <name>'
+        );
+      }
+      return this.createToken(name);
     }
+
+    if (subcommand === 'list') {
+      return this.listTokens(opts);
+    }
+
+    if (subcommand === 'revoke') {
+      const [tokenId] = subArgs;
+      if (!tokenId) {
+        throw this.usageError(
+          'Token ID is required: gitcache tokens revoke <token-id>'
+        );
+      }
+      return this.revokeToken(tokenId);
+    }
+
+    // Default action
+    if (!subcommand) {
+      return this.listTokens(opts);
+    }
+
+    throw this.usageError(`Unknown tokens command: ${subcommand}`);
   }
 
   private async createToken(name: string): Promise<string> {
@@ -116,7 +117,7 @@ export class Tokens extends BaseCommand {
       }
 
       const result = await response.json();
-      const token = result.token || result;
+      const token = result.token;
 
       return [
         '✅ CI Token Created Successfully!',
@@ -124,12 +125,12 @@ export class Tokens extends BaseCommand {
         '🔑 Token Details:',
         `   ID: ${token.id}`,
         `   Name: ${token.name || name}`,
-        `   Value: ${token.value || token.token}`,
+        `   Value: ${token.value}`,
         `   Organization: ${orgId}`,
-        `   Prefix: ${(token.value || token.token || '').substring(0, 12)}...`,
+        `   Prefix: ${token.value.substring(0, 12)}...`,
         '',
         '💡 Add this to your CI environment:',
-        `   export GITCACHE_TOKEN=${token.value || token.token}`,
+        `   export GITCACHE_TOKEN=${token.value}`,
         '',
         '⚠️  This token will only be shown once - save it now!',
         '',
@@ -170,7 +171,7 @@ export class Tokens extends BaseCommand {
       }
 
       const result = await response.json();
-      const allTokens: Token[] = result.tokens || result || [];
+      const allTokens: Token[] = result.tokens;
 
       // Calculate counts first
       const activeTokens = allTokens.filter(
@@ -223,7 +224,7 @@ export class Tokens extends BaseCommand {
           return [
             `  🔑 ${token.name || 'Unnamed'}`,
             `     ID: ${token.id}`,
-            `     Prefix: ${token.prefix || token.value?.substring(0, 12) || 'Unknown'}...`,
+            `     Prefix: ${token.prefix || 'Unknown'}`,
             `     Created: ${created}`,
             `     Last used: ${lastUsed}`,
             `     Status: ${status}`,
@@ -256,7 +257,7 @@ export class Tokens extends BaseCommand {
       return [
         '❌ Failed to list tokens',
         '',
-        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error: ${String(error)}`,
         '',
         'Please verify your authentication and try again.',
       ].join('\n');
