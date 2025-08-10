@@ -2,27 +2,32 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BaseCommand } from '../base-cmd.js';
+import { AuthManager } from '../lib/auth-manager.js';
+import {
+  detectCIEnvironment,
+  getCIErrorMessage,
+  isInCI,
+} from '../lib/ci-environment.js';
 import { getDefaultMaxCacheSize } from '../lib/config.js';
+import { GitCache } from '../lib/git-cache.js';
 import {
   calculateCacheSize,
   formatBytes,
   parseSizeToBytes,
 } from '../lib/prune.js';
-import { TarballBuilder } from '../lib/tarball-builder.js';
 import { RegistryClient } from '../lib/registry-client.js';
-import { GitCache } from '../lib/git-cache.js';
-import { AuthManager } from '../lib/auth-manager.js';
+import { TarballBuilder } from '../lib/tarball-builder.js';
 import {
   getCacheDir,
   getPlatformIdentifier,
   getTarballCachePath,
 } from '../lib/utils/path.js';
-import { resolveGitReferences, scanLockfile } from '../lockfile/scan.js';
 import {
-  isInCI,
-  detectCIEnvironment,
-  getCIErrorMessage,
-} from '../lib/ci-environment.js';
+  parsePackageJsonGitDeps,
+  resolveGitReferences,
+  scanLockfile,
+  type LockfileParseResult,
+} from '../lockfile/scan.js';
 
 /**
  * Install command - runs npm install with gitcache as the npm cache
@@ -122,16 +127,59 @@ export class Install extends BaseCommand {
     try {
       // Look for lockfile in current directory
       const lockfilePath = join(process.cwd(), 'package-lock.json');
+      let lockfileResult: LockfileParseResult;
 
-      if (!existsSync(lockfilePath)) {
-        // No lockfile found, skip preparation
-        return;
+      if (existsSync(lockfilePath)) {
+        console.log('🔍 Scanning lockfile for Git dependencies...');
+
+        // Scan lockfile for Git dependencies
+        lockfileResult = scanLockfile(lockfilePath);
+      } else {
+        // No lockfile found, try scanning package.json directly (first-time install)
+        console.log(
+          '🔍 No lockfile found, scanning package.json for Git dependencies...'
+        );
+
+        const packageJsonPath = join(process.cwd(), 'package.json');
+        if (!existsSync(packageJsonPath)) {
+          // No package.json either, skip preparation
+          return;
+        }
+
+        // Import the parsePackageJsonGitDeps function
+        const gitDeps = parsePackageJsonGitDeps(packageJsonPath);
+
+        if (gitDeps.size === 0) {
+          // No Git dependencies found in package.json
+          return;
+        }
+
+        // Convert Map to GitDependency array format
+        const dependencies = Array.from(gitDeps.entries()).map(
+          ([name, gitUrl]: [string, string]) => {
+            // Clean the git URL by removing git+ prefix and extracting base URL and reference
+            const cleanUrl = gitUrl.replace(/^git\+/, '');
+            const [baseUrl, reference] = cleanUrl.includes('#')
+              ? cleanUrl.split('#')
+              : [cleanUrl, 'HEAD'];
+
+            return {
+              name,
+              gitUrl: baseUrl, // Clean base URL without reference
+              reference: reference,
+              preferredUrl: baseUrl, // Use base URL as preferred
+              lockfileUrl: gitUrl, // Original URL from package.json
+              packageJsonUrl: gitUrl, // Same as lockfileUrl for package.json source
+            };
+          }
+        );
+
+        lockfileResult = {
+          dependencies,
+          lockfileVersion: 0, // Indicate this came from package.json
+          hasGitDependencies: dependencies.length > 0,
+        };
       }
-
-      console.log('🔍 Scanning lockfile for Git dependencies...');
-
-      // Scan lockfile for Git dependencies
-      const lockfileResult = scanLockfile(lockfilePath);
 
       if (!lockfileResult.hasGitDependencies) {
         // No Git dependencies found, skip preparation

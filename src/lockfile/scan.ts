@@ -1,6 +1,6 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { logRefResolution } from '../lib/utils/log.js';
 
 interface LockfileV1Dependency {
@@ -95,7 +95,9 @@ export function scanLockfile(lockfilePath: string): LockfileParseResult {
 /**
  * Parse package.json to extract original Git URLs (more reliable than lockfile due to npm v7+ bug)
  */
-function parsePackageJsonGitDeps(packageJsonPath: string): Map<string, string> {
+export function parsePackageJsonGitDeps(
+  packageJsonPath: string
+): Map<string, string> {
   const gitDeps = new Map<string, string>();
 
   if (!existsSync(packageJsonPath)) {
