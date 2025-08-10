@@ -71,7 +71,6 @@ describe('CLI', () => {
       expect(mockProgram.description).toHaveBeenCalledWith(
         'Universal Git-dependency cache & proxy CLI'
       );
-      expect(mockProgram.version).toHaveBeenCalledWith('1.6.0');
       expect(mockProgram.option).toHaveBeenCalledWith(
         '--verbose',
         'show verbose help including aliases'

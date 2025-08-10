@@ -1,16 +1,16 @@
+import { spawnSync } from 'node:child_process';
+import * as nodeFs from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Install } from '../../commands/install.js';
-import * as nodeFs from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { scanLockfile, resolveGitReferences } from '../../lockfile/scan.js';
-import { TarballBuilder } from '../../lib/tarball-builder.js';
-import { RegistryClient } from '../../lib/registry-client.js';
 import { AuthManager } from '../../lib/auth-manager.js';
-import { GitCache } from '../../lib/git-cache.js';
-import * as pathUtils from '../../lib/utils/path.js';
-import * as pruneUtils from '../../lib/prune.js';
-import * as configUtils from '../../lib/config.js';
 import * as ciEnvironment from '../../lib/ci-environment.js';
+import * as configUtils from '../../lib/config.js';
+import { GitCache } from '../../lib/git-cache.js';
+import * as pruneUtils from '../../lib/prune.js';
+import { RegistryClient } from '../../lib/registry-client.js';
+import { TarballBuilder } from '../../lib/tarball-builder.js';
+import * as pathUtils from '../../lib/utils/path.js';
+import { resolveGitReferences, scanLockfile } from '../../lockfile/scan.js';
 
 // Mock all dependencies
 vi.mock('node:fs');
@@ -1606,6 +1606,231 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       });
 
       Object.defineProperty(process, 'platform', { value: originalPlatform });
+    });
+  });
+
+  describe('First-time install behavior', () => {
+    it('should scan package.json when no lockfile exists (first-time install)', async () => {
+      // Mock no lockfile exists, but package.json does
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        if (path.includes('package-lock.json')) return false;
+        if (path.includes('package.json')) return true;
+        if (path.includes('package.tgz')) return false;
+        return false;
+      });
+
+      // Mock parsePackageJsonGitDeps to return a Git dependency
+      const { parsePackageJsonGitDeps } = await import(
+        '../../lockfile/scan.js'
+      );
+      vi.mocked(parsePackageJsonGitDeps).mockReturnValue(
+        new Map([
+          ['test-git-dep', 'git+https://github.com/test/repo.git#v1.0.0'],
+        ])
+      );
+
+      // Mock resolveGitReferences
+      vi.mocked(resolveGitReferences).mockResolvedValue([
+        {
+          name: 'test-git-dep',
+          gitUrl: 'https://github.com/test/repo.git',
+          reference: 'v1.0.0',
+          resolvedSha: 'abc123',
+          preferredUrl: 'https://github.com/test/repo.git',
+          lockfileUrl: 'git+https://github.com/test/repo.git#v1.0.0',
+          packageJsonUrl: 'git+https://github.com/test/repo.git#v1.0.0',
+        },
+      ]);
+
+      // Mock tarball not in cache initially
+      mockTarballBuilder.getCachedTarball.mockReturnValue(null);
+
+      // Mock successful tarball build
+      mockTarballBuilder.buildTarball.mockResolvedValue(undefined);
+
+      // Mock successful npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        signal: null,
+        error: undefined,
+        output: [],
+        pid: 12345,
+        stderr: Buffer.from(''),
+        stdout: Buffer.from(''),
+      });
+
+      await installCommand.exec();
+
+      // Verify package.json was parsed when no lockfile exists
+      expect(parsePackageJsonGitDeps).toHaveBeenCalledWith(
+        expect.stringContaining('package.json')
+      );
+
+      // Verify Git references were resolved
+      expect(resolveGitReferences).toHaveBeenCalledWith([
+        expect.objectContaining({
+          name: 'test-git-dep',
+          gitUrl: 'https://github.com/test/repo.git', // Should be clean base URL
+          reference: 'v1.0.0', // Should be extracted from hash
+          preferredUrl: 'https://github.com/test/repo.git', // Should be clean base URL
+        }),
+      ]);
+
+      // Verify tarball was built
+      expect(mockTarballBuilder.buildTarball).toHaveBeenCalledWith(
+        'https://github.com/test/repo.git',
+        'abc123',
+        { force: true }
+      );
+
+      // Verify npm install was called
+      expect(spawnSync).toHaveBeenCalledWith(
+        'npm',
+        ['install'],
+        expect.any(Object)
+      );
+    });
+
+    it('should skip preparation when no package.json exists (first-time install)', async () => {
+      // Mock no lockfile and no package.json
+      vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+
+      // Mock successful npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        signal: null,
+        error: undefined,
+        output: [],
+        pid: 12345,
+        stderr: Buffer.from(''),
+        stdout: Buffer.from(''),
+      });
+
+      await installCommand.exec();
+
+      // Verify no Git dependency processing was attempted
+      expect(mockTarballBuilder.buildTarball).not.toHaveBeenCalled();
+      expect(mockRegistryClient.has).not.toHaveBeenCalled();
+
+      // Verify npm install was still called
+      expect(spawnSync).toHaveBeenCalledWith(
+        'npm',
+        ['install'],
+        expect.any(Object)
+      );
+    });
+
+    it('should skip preparation when package.json has no Git dependencies (first-time install)', async () => {
+      // Mock no lockfile exists, but package.json does
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        if (path.includes('package-lock.json')) return false;
+        if (path.includes('package.json')) return true;
+        return false;
+      });
+
+      // Mock parsePackageJsonGitDeps to return no Git dependencies
+      const { parsePackageJsonGitDeps } = await import(
+        '../../lockfile/scan.js'
+      );
+      vi.mocked(parsePackageJsonGitDeps).mockReturnValue(new Map());
+
+      // Mock successful npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        signal: null,
+        error: undefined,
+        output: [],
+        pid: 12345,
+        stderr: Buffer.from(''),
+        stdout: Buffer.from(''),
+      });
+
+      await installCommand.exec();
+
+      // Verify package.json was parsed
+      expect(parsePackageJsonGitDeps).toHaveBeenCalledWith(
+        expect.stringContaining('package.json')
+      );
+
+      // Verify no Git dependency processing was attempted since no Git deps found
+      expect(resolveGitReferences).not.toHaveBeenCalled();
+      expect(mockTarballBuilder.buildTarball).not.toHaveBeenCalled();
+
+      // Verify npm install was still called
+      expect(spawnSync).toHaveBeenCalledWith(
+        'npm',
+        ['install'],
+        expect.any(Object)
+      );
+    });
+
+    it('should default to HEAD reference when Git URL has no hash fragment (first-time install)', async () => {
+      // Mock no lockfile exists, but package.json does
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        if (path.includes('package-lock.json')) return false;
+        if (path.includes('package.json')) return true;
+        if (path.includes('package.tgz')) return false;
+        return false;
+      });
+
+      // Mock parsePackageJsonGitDeps to return a Git dependency without hash fragment
+      const { parsePackageJsonGitDeps } = await import(
+        '../../lockfile/scan.js'
+      );
+      vi.mocked(parsePackageJsonGitDeps).mockReturnValue(
+        new Map([
+          ['test-git-dep', 'git+https://github.com/test/repo.git'], // No #reference
+        ])
+      );
+
+      // Mock resolveGitReferences
+      vi.mocked(resolveGitReferences).mockResolvedValue([
+        {
+          name: 'test-git-dep',
+          gitUrl: 'https://github.com/test/repo.git',
+          reference: 'HEAD',
+          resolvedSha: 'abc123',
+          preferredUrl: 'https://github.com/test/repo.git',
+          lockfileUrl: 'git+https://github.com/test/repo.git',
+          packageJsonUrl: 'git+https://github.com/test/repo.git',
+        },
+      ]);
+
+      // Mock tarball not in cache initially
+      mockTarballBuilder.getCachedTarball.mockReturnValue(null);
+
+      // Mock successful tarball build
+      mockTarballBuilder.buildTarball.mockResolvedValue(undefined);
+
+      // Mock successful npm install
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        signal: null,
+        error: undefined,
+        output: [],
+        pid: 12345,
+        stderr: Buffer.from(''),
+        stdout: Buffer.from(''),
+      });
+
+      await installCommand.exec();
+
+      // Verify Git references were resolved with HEAD as default reference
+      expect(resolveGitReferences).toHaveBeenCalledWith([
+        expect.objectContaining({
+          name: 'test-git-dep',
+          gitUrl: 'https://github.com/test/repo.git',
+          reference: 'HEAD', // Should default to HEAD when no hash fragment
+          preferredUrl: 'https://github.com/test/repo.git',
+        }),
+      ]);
+
+      // Verify tarball was built with correct parameters
+      expect(mockTarballBuilder.buildTarball).toHaveBeenCalledWith(
+        'https://github.com/test/repo.git',
+        'abc123',
+        { force: true }
+      );
     });
   });
 });
