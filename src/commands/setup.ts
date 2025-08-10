@@ -317,7 +317,84 @@ export class Setup extends BaseCommand {
       ].join('\n');
     }
 
+    // Check if user is already authenticated
+    const { AuthManager } = await import('../lib/auth-manager.js');
+    const authManager = new AuthManager();
+
+    if (
+      authManager.isAuthenticated() &&
+      authManager.getTokenType() === 'user'
+    ) {
+      // User is already authenticated, just update organization context
+      const currentOrg = authManager.getOrgId();
+      const userEmail = authManager.getEmail();
+
+      console.log(`🔍 Already authenticated as: ${userEmail || 'user'}`);
+      console.log(
+        `🔄 Switching organization context from ${currentOrg} to ${org}...`
+      );
+
+      try {
+        // Verify user has access to the requested organization
+        const orgsResult = await this.registryClient.listOrganizations();
+        const targetOrg = orgsResult.organizations.find(
+          (o) => o.id === org || o.name === org
+        );
+
+        if (!targetOrg) {
+          return [
+            `❌ Organization "${org}" not found or not accessible`,
+            '',
+            'Available organizations:',
+            ...orgsResult.organizations.map(
+              (o) => `  • ${o.name} (ID: ${o.id}) - ${o.role}`
+            ),
+            '',
+            '💡 Use: gitcache setup --list-orgs',
+          ].join('\n');
+        }
+
+        // Use organization ID (not name) for consistency
+        const orgId = targetOrg.id;
+
+        // Update auth data with new organization context
+        if (authManager.updateOrgContext(orgId)) {
+          return [
+            '✅ Organization context updated successfully!',
+            `🏢 Switched to: ${targetOrg.name} (${orgId}) - ${targetOrg.role}`,
+            '',
+            '🚀 Your gitcache commands now use the new organization context.',
+            '',
+            '💡 Next steps:',
+            '   • Generate CI tokens: gitcache tokens create <name>',
+            '   • List your tokens: gitcache tokens list',
+            '   • Check status: gitcache auth status',
+          ].join('\n');
+        } else {
+          return [
+            '❌ Failed to update organization context',
+            '',
+            'Please try logging in again:',
+            '  gitcache auth login <your-email>',
+          ].join('\n');
+        }
+      } catch (error) {
+        return [
+          '❌ Failed to verify organization access',
+          '',
+          `Error: ${String(error)}`,
+          '',
+          'Please verify:',
+          '• Organization name/ID is correct',
+          '• You have access to the organization',
+          '• Network connectivity to GitCache',
+        ].join('\n');
+      }
+    }
+
+    // User is not authenticated, proceed with login flow
     try {
+      console.log('🔐 GitCache authentication required');
       console.log('');
 
       // Get email

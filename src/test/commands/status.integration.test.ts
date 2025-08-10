@@ -95,7 +95,7 @@ describe('Status Command Integration', () => {
     it('should show appropriate registry status when not authenticated', async () => {
       // Clear any existing authentication for this test
       const authCommand = new Auth();
-      authCommand.exec(['logout'], {});
+      await authCommand.exec(['logout'], {});
 
       const result = await statusCommand.exec([], {});
 
@@ -106,7 +106,7 @@ describe('Status Command Integration', () => {
     it('should include setup guidance when not authenticated', async () => {
       // Clear any existing authentication for this test
       const authCommand = new Auth();
-      authCommand.exec(['logout'], {});
+      await authCommand.exec(['logout'], {});
 
       const result = await statusCommand.exec([], { detailed: true });
 

@@ -232,4 +232,25 @@ export class AuthManager {
   private getApiUrl(): string {
     return process.env.GITCACHE_API_URL || 'https://api.grata-labs.com';
   }
+
+  /**
+   * Update organization context for authenticated user
+   */
+  updateOrgContext(newOrgId: string): boolean {
+    if (!this.isAuthenticated() || this.getTokenType() !== 'user') {
+      return false;
+    }
+
+    if (!this.authData) {
+      return false;
+    }
+
+    // Update the organization ID while preserving other auth data
+    this.storeAuthData({
+      ...this.authData,
+      orgId: newOrgId,
+    });
+
+    return true;
+  }
 }

@@ -1466,4 +1466,603 @@ describe('Setup Command', () => {
       ]);
     });
   });
+
+  describe('Organization switching', () => {
+    it('should switch organization context when user is already authenticated', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('user'),
+        getOrgId: vi.fn().mockReturnValue('old-org'),
+        getEmail: vi.fn().mockReturnValue('test@example.com'),
+        updateOrgContext: vi.fn().mockReturnValue(true),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock the registry client's listOrganizations method
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                { id: 'old-org', name: 'Old Organization', role: 'admin' },
+                { id: 'new-org', name: 'New Organization', role: 'member' },
+              ],
+            }),
+        });
+
+      const result = await setup.exec([], { org: 'new-org' });
+
+      expect(result).toContain('✅ Organization context updated successfully!');
+      expect(result).toContain(
+        '🏢 Switched to: New Organization (new-org) - member'
+      );
+      expect(result).toContain(
+        '🚀 Your gitcache commands now use the new organization context.'
+      );
+      expect(result).toContain(
+        '• Generate CI tokens: gitcache tokens create <name>'
+      );
+
+      // Verify authentication status messages
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔍 Already authenticated as: test@example.com'
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔄 Switching organization context from old-org to new-org...'
+      );
+
+      // Verify updateOrgContext was called with the correct org ID
+      expect(mockAuthManager.updateOrgContext).toHaveBeenCalledWith('new-org');
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
+    });
+
+    it('should handle organization not found when switching context', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('user'),
+        getOrgId: vi.fn().mockReturnValue('old-org'),
+        getEmail: vi.fn().mockReturnValue('test@example.com'),
+        updateOrgContext: vi.fn().mockReturnValue(true),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock the registry client's listOrganizations method
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                { id: 'old-org', name: 'Old Organization', role: 'admin' },
+                {
+                  id: 'available-org',
+                  name: 'Available Organization',
+                  role: 'member',
+                },
+              ],
+            }),
+        });
+
+      const result = await setup.exec([], { org: 'nonexistent-org' });
+
+      expect(result).toContain(
+        '❌ Organization "nonexistent-org" not found or not accessible'
+      );
+      expect(result).toContain('Available organizations:');
+      expect(result).toContain('• Old Organization (ID: old-org) - admin');
+      expect(result).toContain(
+        '• Available Organization (ID: available-org) - member'
+      );
+      expect(result).toContain('💡 Use: gitcache setup --list-orgs');
+
+      // Verify we attempted to check organizations
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔍 Already authenticated as: test@example.com'
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔄 Switching organization context from old-org to nonexistent-org...'
+      );
+
+      // Verify updateOrgContext was not called since org wasn't found
+      expect(mockAuthManager.updateOrgContext).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
+    });
+
+    it('should handle organization switching by name when already authenticated', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('user'),
+        getOrgId: vi.fn().mockReturnValue('old-org-id'),
+        getEmail: vi.fn().mockReturnValue('user@company.com'),
+        updateOrgContext: vi.fn().mockReturnValue(true),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock the registry client's listOrganizations method
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                { id: 'old-org-id', name: 'Old Organization', role: 'admin' },
+                {
+                  id: 'target-org-id',
+                  name: 'Target Organization',
+                  role: 'owner',
+                },
+              ],
+            }),
+        });
+
+      // Use organization name instead of ID
+      const result = await setup.exec([], { org: 'Target Organization' });
+
+      expect(result).toContain('✅ Organization context updated successfully!');
+      expect(result).toContain(
+        '🏢 Switched to: Target Organization (target-org-id) - owner'
+      );
+
+      // Verify updateOrgContext was called with the correct org ID (not name)
+      expect(mockAuthManager.updateOrgContext).toHaveBeenCalledWith(
+        'target-org-id'
+      );
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
+    });
+
+    it('should handle failed org context update when already authenticated', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated but updateOrgContext fails
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('user'),
+        getOrgId: vi.fn().mockReturnValue('old-org'),
+        getEmail: vi.fn().mockReturnValue('test@example.com'),
+        updateOrgContext: vi.fn().mockReturnValue(false), // Simulate failure
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock the registry client's listOrganizations method
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                { id: 'old-org', name: 'Old Organization', role: 'admin' },
+                { id: 'new-org', name: 'New Organization', role: 'member' },
+              ],
+            }),
+        });
+
+      const result = await setup.exec([], { org: 'new-org' });
+
+      expect(result).toContain('❌ Failed to update organization context');
+      expect(result).toContain('Please try logging in again:');
+      expect(result).toContain('gitcache auth login <your-email>');
+
+      // Verify updateOrgContext was attempted
+      expect(mockAuthManager.updateOrgContext).toHaveBeenCalledWith('new-org');
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
+    });
+
+    it('should handle network error during organization verification when already authenticated', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('user'),
+        getOrgId: vi.fn().mockReturnValue('current-org'),
+        getEmail: vi.fn().mockReturnValue('test@example.com'),
+        updateOrgContext: vi.fn().mockReturnValue(true),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock the registry client's listOrganizations method to throw an error
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          listOrganizations: () => Promise.reject(new Error('Network timeout')),
+        });
+
+      const result = await setup.exec([], { org: 'target-org' });
+
+      expect(result).toContain('❌ Failed to verify organization access');
+      expect(result).toContain('Error: Network timeout');
+      expect(result).toContain('Please verify:');
+      expect(result).toContain('• Organization name/ID is correct');
+      expect(result).toContain('• You have access to the organization');
+      expect(result).toContain('• Network connectivity to GitCache');
+
+      // Verify we attempted to check organizations
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔍 Already authenticated as: test@example.com'
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔄 Switching organization context from current-org to target-org...'
+      );
+
+      // Verify updateOrgContext was not called due to network error
+      expect(mockAuthManager.updateOrgContext).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
+    });
+
+    it('should fall back to authentication flow when user is not authenticated', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to not be authenticated
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(false),
+        getTokenType: vi.fn().mockReturnValue(null),
+        getOrgId: vi.fn().mockReturnValue(null),
+        getEmail: vi.fn().mockReturnValue(null),
+        updateOrgContext: vi.fn(),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock readline and password input for authentication flow
+      const mockRl = {
+        question: vi.fn().mockResolvedValueOnce('test@example.com'),
+        close: vi.fn(),
+      };
+      vi.mocked(readline.createInterface).mockReturnValueOnce(mockRl as any);
+
+      vi.spyOn(setup as any, 'getPasswordInput').mockResolvedValueOnce(
+        'testpassword'
+      );
+
+      // Mock authentication API
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ idToken: 'new_user_token' }),
+      });
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      expect(result).toContain('✓ Connected to GitCache registry');
+      expect(result).toContain('✓ Team cache sharing enabled for testorg');
+
+      // Should not show org switching messages since we went through auth flow
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔐 GitCache authentication required'
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Already authenticated')
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Switching organization')
+      );
+
+      // Verify updateOrgContext was not called since we did full authentication
+      expect(mockAuthManager.updateOrgContext).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should fall back to authentication flow when user has CI token but not user token', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated but with CI token type
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('ci'),
+        getOrgId: vi.fn().mockReturnValue('ci-org'),
+        getEmail: vi.fn().mockReturnValue(null),
+        updateOrgContext: vi.fn(),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock readline and password input for authentication flow
+      const mockRl = {
+        question: vi.fn().mockResolvedValueOnce('test@example.com'),
+        close: vi.fn(),
+      };
+      vi.mocked(readline.createInterface).mockReturnValueOnce(mockRl as any);
+
+      vi.spyOn(setup as any, 'getPasswordInput').mockResolvedValueOnce(
+        'testpassword'
+      );
+
+      // Mock authentication API
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ idToken: 'new_user_token' }),
+      });
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      expect(result).toContain('✓ Connected to GitCache registry');
+      expect(result).toContain('✓ Team cache sharing enabled for testorg');
+
+      // Should not show org switching messages since token type is 'ci' not 'user'
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔐 GitCache authentication required'
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Already authenticated')
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Switching organization')
+      );
+
+      // Verify updateOrgContext was not called since we did full authentication
+      expect(mockAuthManager.updateOrgContext).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should use user fallback when userEmail is falsy during organization switching', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated but with falsy email
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('user'),
+        getOrgId: vi.fn().mockReturnValue('old-org'),
+        getEmail: vi.fn().mockReturnValue(null), // Falsy email to trigger fallback
+        updateOrgContext: vi.fn().mockReturnValue(true),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      // Mock the registry client's listOrganizations method
+      const registryClientSpy = vi
+        .spyOn(setup as any, 'registryClient', 'get')
+        .mockReturnValue({
+          listOrganizations: () =>
+            Promise.resolve({
+              organizations: [
+                { id: 'old-org', name: 'Old Organization', role: 'admin' },
+                { id: 'new-org', name: 'New Organization', role: 'member' },
+              ],
+            }),
+        });
+
+      const result = await setup.exec([], { org: 'new-org' });
+
+      expect(result).toContain('✅ Organization context updated successfully!');
+      expect(result).toContain(
+        '🏢 Switched to: New Organization (new-org) - member'
+      );
+
+      // Verify the fallback to 'user' was used in the console output
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔍 Already authenticated as: user'
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔄 Switching organization context from old-org to new-org...'
+      );
+
+      // Verify updateOrgContext was called with the correct org ID
+      expect(mockAuthManager.updateOrgContext).toHaveBeenCalledWith('new-org');
+
+      consoleSpy.mockRestore();
+      registryClientSpy.mockRestore();
+    });
+
+    it('should fall back to authentication flow when user is not authenticated', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to not be authenticated
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(false),
+        getTokenType: vi.fn().mockReturnValue(null),
+        getOrgId: vi.fn().mockReturnValue(null),
+        getEmail: vi.fn().mockReturnValue(null),
+        updateOrgContext: vi.fn(),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock readline and password input for authentication flow
+      const mockRl = {
+        question: vi.fn().mockResolvedValueOnce('test@example.com'),
+        close: vi.fn(),
+      };
+      vi.mocked(readline.createInterface).mockReturnValueOnce(mockRl as any);
+
+      vi.spyOn(setup as any, 'getPasswordInput').mockResolvedValueOnce(
+        'testpassword'
+      );
+
+      // Mock authentication API
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ idToken: 'new_user_token' }),
+      });
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      expect(result).toContain('✓ Connected to GitCache registry');
+      expect(result).toContain('✓ Team cache sharing enabled for testorg');
+
+      // Should not show org switching messages since we went through auth flow
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔐 GitCache authentication required'
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Already authenticated')
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Switching organization')
+      );
+
+      // Verify updateOrgContext was not called since we did full authentication
+      expect(mockAuthManager.updateOrgContext).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should fall back to authentication flow when user has CI token but not user token', async () => {
+      // Ensure we're not in CI mode
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock AuthManager to be authenticated but with CI token type
+      const mockAuthManager = {
+        isAuthenticated: vi.fn().mockReturnValue(true),
+        getTokenType: vi.fn().mockReturnValue('ci'),
+        getOrgId: vi.fn().mockReturnValue('ci-org'),
+        getEmail: vi.fn().mockReturnValue(null),
+        updateOrgContext: vi.fn(),
+      };
+
+      // Mock the dynamic import of AuthManager
+      vi.doMock('../../lib/auth-manager.js', () => ({
+        AuthManager: vi.fn().mockImplementation(() => mockAuthManager),
+      }));
+
+      // Mock readline and password input for authentication flow
+      const mockRl = {
+        question: vi.fn().mockResolvedValueOnce('test@example.com'),
+        close: vi.fn(),
+      };
+      vi.mocked(readline.createInterface).mockReturnValueOnce(mockRl as any);
+
+      vi.spyOn(setup as any, 'getPasswordInput').mockResolvedValueOnce(
+        'testpassword'
+      );
+
+      // Mock authentication API
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ idToken: 'new_user_token' }),
+      });
+
+      // Mock console.log to capture messages
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const result = await setup.exec([], { org: 'testorg' });
+
+      expect(result).toContain('✓ Connected to GitCache registry');
+      expect(result).toContain('✓ Team cache sharing enabled for testorg');
+
+      // Should not show org switching messages since token type is 'ci' not 'user'
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '🔐 GitCache authentication required'
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Already authenticated')
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Switching organization')
+      );
+
+      // Verify updateOrgContext was not called since we did full authentication
+      expect(mockAuthManager.updateOrgContext).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+  });
 });
