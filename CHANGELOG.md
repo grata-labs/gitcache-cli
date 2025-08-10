@@ -1,3 +1,18 @@
+# [1.8.0](https://github.com/grata-labs/gitcache-cli/compare/v1.7.0...v1.8.0) (2025-08-10)
+
+
+### Bug Fixes
+
+* don't require auth if already authed ([cac068c](https://github.com/grata-labs/gitcache-cli/commit/cac068c072bcfe3c65225bf9a6089f389e217e68))
+* fixes gitcache not caching without package-lock ([21120ae](https://github.com/grata-labs/gitcache-cli/commit/21120ae0b6fc9664ec6d14f318b429bdeb42e085))
+* make downloads work ([a8f9430](https://github.com/grata-labs/gitcache-cli/commit/a8f943001cadc6f2d574ac304d3bca1994625a32))
+
+
+### Features
+
+* adds list orgs as feature ([ae22d05](https://github.com/grata-labs/gitcache-cli/commit/ae22d054f6a3a488bbf5b847cde22baf61de72f6))
+* make uploads work. Fix token expiration ([a5dbeb4](https://github.com/grata-labs/gitcache-cli/commit/a5dbeb40ddee1cd1f364e710809700e74546a74e))
+
 # [1.7.0](https://github.com/grata-labs/gitcache-cli/compare/v1.6.0...v1.7.0) (2025-08-09)
 
 
