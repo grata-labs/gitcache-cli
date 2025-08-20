@@ -326,6 +326,11 @@ export class RegistryClient {
       }
 
       this.logVerbose(`Successfully uploaded ${packageId} to S3`);
+
+      // Notify server that upload completed
+      await this.confirmUpload(uploadInfo.metadata);
+
+      this.logVerbose(`Upload confirmed for ${packageId}`);
     } catch (error) {
       this.logVerbose(`Upload failed for ${packageId}: ${error}`);
       throw error;
@@ -444,6 +449,41 @@ export class RegistryClient {
    */
   private calculateSHA256(data: Buffer): string {
     return createHash('sha256').update(data).digest('hex');
+  }
+
+  /**
+   * Confirm upload completion to the server
+   */
+  private async confirmUpload(
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    const artifactId = metadata.artifactId as string;
+    if (!artifactId) {
+      throw new Error('No artifact ID in upload metadata');
+    }
+
+    const token = this.getAuthToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(
+      `${this.config.apiUrl}/artifacts/${artifactId}/complete`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Upload confirmation failed: ${response.status} - ${errorText}`
+      );
+    }
   }
 
   /**

@@ -415,7 +415,7 @@ describe('RegistryClient', () => {
             data: {
               uploadUrl: 'https://upload.example.com/presigned-url',
               artifactId: 'test-package-id',
-              metadata: {},
+              metadata: { artifactId: 'test-package-id' },
             },
           }),
         })
@@ -424,11 +424,17 @@ describe('RegistryClient', () => {
           ok: true,
           status: 200,
           text: vi.fn().mockResolvedValue('Success'),
+        })
+        // Mock confirmUpload response
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: vi.fn().mockResolvedValue('Success'),
         });
 
       await registryClient.upload('test-package-id', mockBuffer);
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
 
       // First call should be to get upload URL
       expect(mockFetch).toHaveBeenNthCalledWith(
@@ -459,6 +465,19 @@ describe('RegistryClient', () => {
           headers: expect.objectContaining({
             'Content-Type': 'application/gzip',
             'Content-Length': mockBuffer.length.toString(),
+          }),
+        })
+      );
+
+      // Third call should be confirmUpload
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.grata-labs.com/artifacts/test-package-id/complete',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
           }),
         })
       );
@@ -639,6 +658,113 @@ describe('RegistryClient', () => {
 
       consoleSpy.mockRestore();
     });
+
+    it('should throw error when artifactId is missing from upload metadata', async () => {
+      // We need to test the confirmUpload method directly since the upload flow has a fallback
+      // that prevents this scenario from occurring naturally
+
+      mockAuthManager.isAuthenticated.mockReturnValue(true);
+      mockAuthManager.getAuthToken.mockReturnValue('test-token');
+
+      // Test confirmUpload directly with empty metadata
+      await expect((registryClient as any).confirmUpload({})).rejects.toThrow(
+        'No artifact ID in upload metadata'
+      );
+    });
+
+    it('should throw error when artifactId is empty string in upload metadata', async () => {
+      mockAuthManager.isAuthenticated.mockReturnValue(true);
+      mockAuthManager.getAuthToken.mockReturnValue('test-token');
+
+      // Test confirmUpload directly with empty string artifactId
+      await expect(
+        (registryClient as any).confirmUpload({ artifactId: '' })
+      ).rejects.toThrow('No artifact ID in upload metadata');
+    });
+
+    it('should throw error when auth token is not available during confirmUpload', async () => {
+      // Mock getUploadUrl response with valid artifactId
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              metadata: { artifactId: 'test-package-id' },
+            },
+          }),
+        })
+        // Mock successful S3 upload
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: vi.fn().mockResolvedValue('Success'),
+        });
+
+      // Mock auth token to be null during confirmUpload
+      mockAuthManager.getAuthToken
+        .mockReturnValueOnce('test-token') // For getUploadUrl
+        .mockReturnValueOnce(null); // For confirmUpload
+
+      await expect(
+        registryClient.upload('test-package-id', mockBuffer)
+      ).rejects.toThrow('Not authenticated');
+
+      // Should have called fetch twice (getUploadUrl + S3 upload) but failed before confirmUpload
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw error when confirmUpload request fails', async () => {
+      // Mock getUploadUrl response with valid artifactId
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              uploadUrl: 'https://upload.example.com/presigned-url',
+              metadata: { artifactId: 'test-package-id' },
+            },
+          }),
+        })
+        // Mock successful S3 upload
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: vi.fn().mockResolvedValue('Success'),
+        })
+        // Mock failed confirmUpload response
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: vi.fn().mockResolvedValue('Internal server error'),
+        });
+
+      await expect(
+        registryClient.upload('test-package-id', mockBuffer)
+      ).rejects.toThrow(
+        'Upload confirmation failed: 500 - Internal server error'
+      );
+
+      // Should have called fetch three times (getUploadUrl + S3 upload + confirmUpload)
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      // Verify confirmUpload was called with correct parameters
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.grata-labs.com/artifacts/test-package-id/complete',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
+          }),
+        })
+      );
+    });
   });
 
   describe('uploadAsync', () => {
@@ -664,19 +790,25 @@ describe('RegistryClient', () => {
             data: {
               uploadUrl: 'https://upload.example.com/presigned-url',
               artifactId: 'test-package-id',
-              metadata: {},
+              metadata: { artifactId: 'test-package-id' },
             },
           }),
       };
 
-      mockFetch.mockResolvedValueOnce(mockResponse).mockResolvedValueOnce({
-        ok: true,
-        text: vi.fn().mockResolvedValue('Success'),
-      });
+      mockFetch
+        .mockResolvedValueOnce(mockResponse)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: vi.fn().mockResolvedValue('Success'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: vi.fn().mockResolvedValue('Success'),
+        });
 
       await client.uploadAsync('test-package-id', testData);
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
     it('should upload in background when background upload is enabled', async () => {
@@ -705,15 +837,21 @@ describe('RegistryClient', () => {
             data: {
               uploadUrl: 'https://upload.example.com/presigned-url',
               artifactId: 'test-package-id',
-              metadata: {},
+              metadata: { artifactId: 'test-package-id' },
             },
           }),
       };
 
-      mockFetch.mockResolvedValueOnce(mockResponse).mockResolvedValueOnce({
-        ok: true,
-        text: vi.fn().mockResolvedValue('Success'),
-      });
+      mockFetch
+        .mockResolvedValueOnce(mockResponse)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: vi.fn().mockResolvedValue('Success'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: vi.fn().mockResolvedValue('Success'),
+        });
 
       // Call uploadAsync and don't await the background upload
       await client.uploadAsync('test-package-id', testData);
@@ -721,7 +859,7 @@ describe('RegistryClient', () => {
       // Give time for background promise to settle
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
       consoleSpy.mockRestore();
     });
 
