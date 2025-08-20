@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/grata-labs/gitcache-cli/compare/v1.8.0...v1.9.0) (2025-08-20)
+
+
+### Features
+
+* adds endpoint for successful uploads ([52f7911](https://github.com/grata-labs/gitcache-cli/commit/52f79110315d4c70046ecf1f61395a63b070fa05))
+
 # [1.8.0](https://github.com/grata-labs/gitcache-cli/compare/v1.7.0...v1.8.0) (2025-08-10)
 
 
