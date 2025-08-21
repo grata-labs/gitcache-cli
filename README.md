@@ -1,6 +1,6 @@
 # GitCache CLI
 
-> Universal Git-dependency cache — _CLI for local caching, lockfile analysis, and optimized installs_
+> Universal Git-dependency cache — _CLI for local caching, team sharing, and optimized installs_
 
 ![CI](https://github.com/grata-labs/gitcache-cli/actions/workflows/ci.yml/badge.svg)
 [![Integration: macOS](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-macos.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-macos.yml)
@@ -8,13 +8,16 @@
 [![Integration: Ubuntu](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml)
 [![npm version](https://img.shields.io/npm/v/@grata-labs/gitcache-cli.svg)](https://www.npmjs.com/package/@grata-labs/gitcache-cli)
 
-**Dramatically speed up npm installs with Git dependencies** by caching and pre-building tarballs locally. GitCache automatically detects Git dependencies in your lockfile, builds optimized tarballs, and serves them from a local cache for lightning-fast subsequent installs.
+**Dramatically speed up npm installs with Git dependencies** by caching and pre-building tarballs locally and sharing them with your team. GitCache automatically detects Git dependencies in your lockfile, builds optimized tarballs, and serves them from local cache or team registry for lightning-fast installs.
 
 ## Quick Start & Speed Demo
 
 ```bash
 # Install GitCache CLI
 npm install -g @grata-labs/gitcache-cli
+
+# Authenticate with GitCache for team features (optional for local-only use)
+gitcache auth login your-email@company.com
 
 # First install: GitCache builds and caches tarballs
 time gitcache install
@@ -40,53 +43,60 @@ _Benchmarks measured on macOS with typical project containing 3-5 Git dependenci
 
 ## Why GitCache?
 
-### Smart Caching for Git Dependencies
+### Smart Caching for Git Dependencies + Team Sharing
 
-GitCache creates a **persistent local cache** that transforms how Git dependencies are handled:
+GitCache creates a **persistent local cache** and **team registry** that transforms how Git dependencies are handled:
 
 ✅ **Lightning fast installs**: Pre-built tarballs eliminate rebuild time  
+✅ **Team cache sharing**: Share built dependencies across your organization  
 ✅ **Offline development**: Work without network connectivity  
 ✅ **Consistent performance**: Predictable speeds across environments  
 ✅ **CI/CD optimization**: Dramatically reduce pipeline execution time  
-✅ **Bandwidth efficiency**: Clone repositories once, reuse forever
+✅ **Bandwidth efficiency**: Clone repositories once, reuse forever  
+✅ **Authentication & organizations**: Secure team collaboration with access controls
 
 ### The npm 7+ Context
 
-Modern npm versions don't cache Git dependencies, requiring fresh clones on every install. This makes GitCache even more valuable for projects using Git dependencies, providing the caching layer that npm lacks.
+Modern npm versions don't cache Git dependencies, requiring fresh clones on every install. This makes GitCache even more valuable for projects using Git dependencies, providing the caching layer that npm lacks, plus team sharing capabilities.
 
 ```bash
 # Before: npm always clones fresh
 npm install  # Downloads Git repos every time
 
-# After: GitCache uses intelligent caching
+# After: GitCache uses intelligent caching + team sharing
 gitcache install  # First run builds cache, subsequent runs are instant
 ```
 
 ## How It Works
 
-GitCache creates a powerful caching layer for Git dependencies using a four-stage optimization pipeline:
+GitCache creates a powerful caching layer for Git dependencies using a four-stage optimization pipeline with optional team sharing:
 
 ```mermaid
 flowchart LR
     A[📋 Scan<br/>Lockfile] --> B[🔍 Clone<br/>& Mirror]
     B --> C[📦 Build<br/>Tarballs]
     C --> D[⚡ Install<br/>from Cache]
+    C --> E[☁️ Team<br/>Registry]
+    E --> D
 
     A1[Parse package.json<br/>& lockfiles for<br/>Git dependencies] -.-> A
     B1[git clone --mirror<br/>to ~/.gitcache/<br/>repos/hash/] -.-> B
     C1[npm pack in repo<br/>Create SHA-keyed<br/>tarball cache] -.-> C
     D1[Extract cached<br/>tarballs to<br/>node_modules/] -.-> D
+    E1[Upload to team<br/>registry for<br/>collaboration] -.-> E
 
     style A fill:#e1f5fe
     style B fill:#f3e5f5
     style C fill:#e8f5e8
     style D fill:#fff3e0
+    style E fill:#e3f2fd
 ```
 
 ### Cache Architecture
 
 - **Git repositories** cached as bare mirrors in `~/.gitcache/repos/`
 - **Built tarballs** stored in `~/.gitcache/tarballs/` keyed by commit SHA + OS + architecture
+- **Team registry** for sharing tarballs across organization (requires authentication)
 - **Default cache limit**: 5 GB with automatic LRU pruning
 - **Cross-platform isolation**: Separate caches for different OS/arch combinations
 
@@ -96,6 +106,7 @@ flowchart LR
 2. **Pre-built tarballs**: Skip `npm pack` during install
 3. **Smart caching**: SHA-based keys ensure perfect cache hits
 4. **Parallel processing**: Build multiple dependencies simultaneously
+5. **Team sharing**: Download pre-built tarballs from teammates
 
 ## Installation
 
@@ -108,6 +119,12 @@ npm install -g @grata-labs/gitcache-cli
 ### Basic Workflow
 
 ```bash
+# Authenticate for team features (optional for local-only)
+gitcache auth login your-email@company.com
+
+# Check status and cache information
+gitcache status
+
 # Analyze your project's Git dependencies
 gitcache scan
 
@@ -118,6 +135,25 @@ gitcache install
 gitcache i
 ```
 
+### Team Collaboration
+
+```bash
+# Login to your organization
+gitcache auth login your-email@company.com
+
+# Switch between organizations
+gitcache auth orgs --org your-org-id
+
+# Generate CI tokens for automation
+gitcache tokens create ci-token-name
+
+# View your tokens
+gitcache tokens list
+
+# Check authentication status
+gitcache auth status
+```
+
 ### Advanced Commands
 
 ```bash
@@ -125,10 +161,11 @@ gitcache i
 gitcache analyze
 
 # Manage cache size (prune old entries using LRU strategy)
-gitcache prune
+gitcache prune --max-size 10GB
 
 # Configure cache settings
-gitcache config --help
+gitcache config --list
+gitcache config --set max-cache-size=15GB
 ```
 
 ### Command Reference
@@ -136,10 +173,32 @@ gitcache config --help
 | Command             | Aliases | Description                                                   |
 | ------------------- | ------- | ------------------------------------------------------------- |
 | `install [args...]` | `i`     | Run npm install using gitcache as the npm cache               |
+| `auth <subcommand>` | `login` | Manage authentication and organization access                 |
+| `tokens <action>`   |         | Manage CI tokens for automation                               |
+| `status`            |         | Show GitCache cache status and registry connectivity          |
 | `scan`              |         | Scan lockfile for Git dependencies                            |
 | `analyze`           |         | Show detailed lockfile analysis and cache status              |
 | `prune`             |         | Prune old cache entries to free disk space using LRU strategy |
 | `config`            |         | Manage gitcache configuration                                 |
+
+### Authentication Commands
+
+| Command                         | Description                        |
+| ------------------------------- | ---------------------------------- |
+| `gitcache auth login <email>`   | Login to your GitCache account     |
+| `gitcache auth logout`          | Logout from GitCache               |
+| `gitcache auth status`          | Show current authentication status |
+| `gitcache auth orgs`            | List your organizations            |
+| `gitcache auth orgs --org <id>` | Switch organization context        |
+| `gitcache auth --org <id>`      | Shortcut to switch organization    |
+
+### Token Management Commands
+
+| Command                         | Description             |
+| ------------------------------- | ----------------------- |
+| `gitcache tokens create <name>` | Create a new CI token   |
+| `gitcache tokens list`          | List all your tokens    |
+| `gitcache tokens revoke <id>`   | Revoke a specific token |
 
 ### Get Help
 
@@ -147,6 +206,47 @@ gitcache config --help
 gitcache --help
 gitcache <command> --help
 gitcache --verbose  # Show command aliases
+```
+
+## CI/CD Integration
+
+GitCache provides excellent CI/CD support with dedicated tokens and automatic environment detection:
+
+### Setup for CI
+
+```bash
+# 1. Create a CI token (run locally)
+gitcache auth login your-email@company.com
+gitcache tokens create my-ci-token
+
+# 2. Add token to your CI environment variables
+# Set GITCACHE_TOKEN=ci_yourorg_abc123...
+
+# 3. Use in CI pipeline
+gitcache install  # Automatically uses token from environment
+```
+
+### Example CI Configurations
+
+**GitHub Actions:**
+
+```yaml
+- name: Setup GitCache
+  env:
+    GITCACHE_TOKEN: ${{ secrets.GITCACHE_TOKEN }}
+  run: |
+    npm install -g @grata-labs/gitcache-cli
+    gitcache install
+```
+
+**GitLab CI:**
+
+```yaml
+before_script:
+  - npm install -g @grata-labs/gitcache-cli
+  - gitcache install
+variables:
+  GITCACHE_TOKEN: $CI_GITCACHE_TOKEN
 ```
 
 ## Cache Management
@@ -161,6 +261,7 @@ GitCache stores data in `~/.gitcache/` with the following structure:
 │   └── <hash>/      # Repository keyed by URL hash
 ├── tarballs/        # Pre-built package tarballs
 │   └── <sha>-<os>-<arch>.tgz  # Platform-specific caches
+├── auth.json        # Authentication credentials
 └── config.json      # GitCache configuration
 ```
 
@@ -173,13 +274,17 @@ GitCache stores data in `~/.gitcache/` with the following structure:
 
 ```bash
 # Check cache size and status
+gitcache status
 gitcache analyze
 
 # Prune cache to free space
 gitcache prune
 
 # Set custom cache limit (example: 10 GB)
-gitcache config --cache-limit 10GB
+gitcache config --set max-cache-size=10GB
+
+# Prune to specific size
+gitcache prune --max-size 5GB
 ```
 
 ## Troubleshooting
@@ -194,19 +299,31 @@ npm config get prefix
 git config --global --list
 ```
 
+**Issue**: Authentication problems or team features not working
+
+```bash
+# Solution: Check authentication status
+gitcache auth status
+gitcache auth login your-email@company.com
+
+# For CI environments
+export GITCACHE_TOKEN=ci_yourorg_...
+```
+
 **Issue**: Cache not being used (slow installs persist)
 
 ```bash
 # Solution: Verify Git dependencies are detected
 gitcache scan
 gitcache analyze  # Shows cache status for each dependency
+gitcache status   # Shows overall cache and registry status
 ```
 
 **Issue**: Disk space issues
 
 ```bash
 # Solution: Check cache size and prune if needed
-gitcache analyze  # Shows current cache size
+gitcache status   # Shows current cache size
 gitcache prune    # Free space using LRU strategy
 ```
 
@@ -218,12 +335,23 @@ gitcache prune
 gitcache install
 ```
 
+**Issue**: Team sharing not working
+
+```bash
+# Solution: Check authentication and organization
+gitcache auth status
+gitcache auth orgs
+gitcache auth orgs --org your-org-id
+```
+
 ### Performance Tips
 
-1. **Pre-install**: GitCache automatically builds tarballs on first use
-2. **Share cache**: Use network storage for `~/.gitcache/` in team environments
-3. **Monitor size**: Regularly check `gitcache analyze` to manage disk usage
-4. **Clean installs**: Use `gitcache install` instead of `npm ci` for Git dependencies
+1. **Authentication**: Login to access team registry for faster downloads
+2. **Pre-install**: GitCache automatically builds tarballs on first use
+3. **Share cache**: Team members automatically share built tarballs
+4. **Monitor size**: Regularly check `gitcache status` to manage disk usage
+5. **Clean installs**: Use `gitcache install` instead of `npm ci` for Git dependencies
+6. **CI optimization**: Use CI tokens for automated environments
 
 ### Debug Mode
 
@@ -278,9 +406,12 @@ DEBUG=gitcache* gitcache install
 - ✅ **Lockfile integration** — scan and analyze Git dependencies
 - ✅ **Optimized installs** — tarball caching with LRU pruning
 - ✅ **Cross-platform support** — macOS, Windows, Ubuntu with CI integration
-- ⏳ **Team cache** — push mirrors to S3-backed GitCache proxy
+- ✅ **Authentication system** — user login and organization management
+- ✅ **Token management** — CI tokens for automation
+- ✅ **Team registry** — share tarballs across organization
+- ⏳ **Enhanced registry features** — advanced caching strategies
 - ⏳ **Integrity verification** — signed manifests and security scanning
-- ⏳ **Enhanced npm integration** — advanced workflow optimizations
+- ⏳ **Advanced npm integration** — workflow optimizations and npm plugin
 
 ## Development
 
