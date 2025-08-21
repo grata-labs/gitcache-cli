@@ -478,6 +478,37 @@ describe('Auth Command', () => {
       });
     });
 
+    describe('organization shortcut', () => {
+      it('should call manageOrgs when --org is provided without subcommand', async () => {
+        mockAuthManagerInstance.isAuthenticated.mockReturnValue(true);
+
+        // Mock the manageOrgs method
+        const mockManageOrgs = vi.spyOn(authCommand as any, 'manageOrgs');
+        mockManageOrgs.mockResolvedValue('✅ Organization context updated!');
+
+        const result = await authCommand.exec([], { org: 'test-org-123' });
+
+        expect(mockManageOrgs).toHaveBeenCalledWith({ org: 'test-org-123' });
+        expect(result).toBe('✅ Organization context updated!');
+
+        mockManageOrgs.mockRestore();
+      });
+
+      it('should not call manageOrgs when subcommand is provided even with --org', async () => {
+        mockAuthManagerInstance.isAuthenticated.mockReturnValue(false);
+
+        // Mock the manageOrgs method
+        const mockManageOrgs = vi.spyOn(authCommand as any, 'manageOrgs');
+
+        const result = await authCommand.exec(['status'], { org: 'test-org' });
+
+        expect(mockManageOrgs).not.toHaveBeenCalled();
+        expect(result).toContain('📝 Not authenticated');
+
+        mockManageOrgs.mockRestore();
+      });
+    });
+
     describe('unknown command', () => {
       it('should throw error for unknown subcommand', async () => {
         await expect(authCommand.exec(['unknown'])).rejects.toThrow(
@@ -867,6 +898,7 @@ describe('Auth Command', () => {
         'logout',
         'status',
         'orgs [--org <organization>]',
+        '--org <organization>  # Shortcut for orgs --org',
         'setup-ci --org <organization> [--token <ci-token>]',
       ]);
       expect(Auth.params).toEqual(['logout', 'status', 'org', 'ci', 'token']);
