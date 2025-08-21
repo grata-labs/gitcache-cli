@@ -28,14 +28,22 @@ time gitcache install
 # → ~5s (extracts pre-built tarballs from cache)
 
 # Result: 10x faster subsequent installs! 🚀
+
+# Add team caching in 90 seconds (optional)
+gitcache tokens create my-ci-token
+# → Add token to CI secrets, done! ✨
 ```
+
+🎯 **See it in action**: [Live demo with working CI](https://github.com/grata-labs/gitcache-demo-repo)
 
 ### Real Performance Comparison
 
 | Install Method     | First Run | Subsequent Runs | Speed Improvement |
 | ------------------ | --------- | --------------- | ----------------- |
-| `npm install`      | 45s       | 45s             | 1x (baseline)     |
-| `gitcache install` | 52s       | 5s              | **9x faster\***   |
+| `npm install`      | 45s       | 45s* | 1x (baseline)     |
+| `gitcache install` | 52s       | 5s              | **9x faster**   |
+
+_*npm doesn't cache Git dependencies - it re-clones them every time_
 
 _First GitCache run is slower due to cache building, but subsequent runs are dramatically faster_
 
@@ -55,16 +63,18 @@ GitCache creates a **persistent local cache** and **team registry** that transfo
 ✅ **Bandwidth efficiency**: Clone repositories once, reuse forever  
 ✅ **Authentication & organizations**: Secure team collaboration with access controls
 
-### The npm 7+ Context
+### The npm Git Dependencies Problem
 
-Modern npm versions don't cache Git dependencies, requiring fresh clones on every install. This makes GitCache even more valuable for projects using Git dependencies, providing the caching layer that npm lacks, plus team sharing capabilities.
+**npm has a fundamental limitation with Git dependencies**: it doesn't cache them properly, requiring fresh clones on every install. This makes GitCache essential for projects using Git dependencies, providing the persistent caching layer that npm completely lacks.
 
 ```bash
-# Before: npm always clones fresh
-npm install  # Downloads Git repos every time
+# The Problem: npm always clones fresh (no caching)
+npm install  # Downloads Git repos every time - even in CI!
+rm -rf node_modules && npm install  # Downloads again - same repos!
 
-# After: GitCache uses intelligent caching + team sharing
+# The Solution: GitCache provides intelligent caching + team sharing
 gitcache install  # First run builds cache, subsequent runs are instant
+rm -rf node_modules && gitcache install  # Uses cache - no re-download!
 ```
 
 ## How It Works
@@ -226,6 +236,52 @@ gitcache tokens create my-ci-token
 gitcache install  # Automatically uses token from environment
 ```
 
+### Why Developers Love Our CI/CD Setup
+
+**Setup time: 90 seconds** ⚡
+
+The entire process from zero to team caching:
+
+1. **Login**: `gitcache auth login` (one-time)
+2. **Create token**: `gitcache tokens create ci-token` 
+3. **Add to CI**: `gh secret set GITCACHE_TOKEN --body "..."`
+
+**That's it!** No complex configuration files, no infrastructure setup, no YAML templating. Your CI/CD pipeline immediately gets:
+
+✅ **Team cache sharing** - Download pre-built dependencies from teammates  
+✅ **Secure authentication** - Organization-scoped access control  
+✅ **Zero maintenance** - Works with any CI/CD platform  
+
+**Try it yourself**: Check out our [live demo repository](https://github.com/grata-labs/gitcache-demo-repo) with working CI workflows!
+
+### CI Workflow Setup (Copy & Paste)
+
+**Step 1**: Create a CI token locally
+```bash
+gitcache auth login your-email@company.com
+gitcache tokens create my-ci-token
+```
+
+**Step 2**: Add token to your repository secrets
+```bash
+# GitHub
+gh secret set GITCACHE_TOKEN --body "ci_yourorg_..."
+
+# Or via GitHub UI: Settings → Secrets → New repository secret
+```
+
+**Step 3**: Use in your workflow
+```yaml
+# Just replace "npm install" with this:
+- run: |
+    npm install -g @grata-labs/gitcache-cli
+    gitcache install
+  env:
+    GITCACHE_TOKEN: ${{ secrets.GITCACHE_TOKEN }}
+```
+
+**That's it!** Your CI now has team caching. ⚡
+
 ### Example CI Configurations
 
 **GitHub Actions:**
@@ -285,79 +341,6 @@ gitcache config --set max-cache-size=10GB
 
 # Prune to specific size
 gitcache prune --max-size 5GB
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue**: GitCache install fails with permission errors
-
-```bash
-# Solution: Check npm and Git permissions
-npm config get prefix
-git config --global --list
-```
-
-**Issue**: Authentication problems or team features not working
-
-```bash
-# Solution: Check authentication status
-gitcache auth status
-gitcache auth login your-email@company.com
-
-# For CI environments
-export GITCACHE_TOKEN=ci_yourorg_...
-```
-
-**Issue**: Cache not being used (slow installs persist)
-
-```bash
-# Solution: Verify Git dependencies are detected
-gitcache scan
-gitcache analyze  # Shows cache status for each dependency
-gitcache status   # Shows overall cache and registry status
-```
-
-**Issue**: Disk space issues
-
-```bash
-# Solution: Check cache size and prune if needed
-gitcache status   # Shows current cache size
-gitcache prune    # Free space using LRU strategy
-```
-
-**Issue**: Build failures for specific repositories
-
-```bash
-# Solution: Clear cache and reinstall
-gitcache prune
-gitcache install
-```
-
-**Issue**: Team sharing not working
-
-```bash
-# Solution: Check authentication and organization
-gitcache auth status
-gitcache auth orgs
-gitcache auth orgs --org your-org-id
-```
-
-### Performance Tips
-
-1. **Authentication**: Login to access team registry for faster downloads
-2. **Pre-install**: GitCache automatically builds tarballs on first use
-3. **Share cache**: Team members automatically share built tarballs
-4. **Monitor size**: Regularly check `gitcache status` to manage disk usage
-5. **Clean installs**: Use `gitcache install` instead of `npm ci` for Git dependencies
-6. **CI optimization**: Use CI tokens for automated environments
-
-### Debug Mode
-
-```bash
-# Enable verbose logging for troubleshooting
-DEBUG=gitcache* gitcache install
 ```
 
 ## Performance Benchmarks
