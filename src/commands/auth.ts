@@ -20,6 +20,7 @@ export class Auth extends BaseCommand {
     'logout',
     'status',
     'orgs [--org <organization>]',
+    '--org <organization>  # Shortcut for orgs --org',
     'setup-ci --org <organization> [--token <ci-token>]',
   ];
   static params = ['logout', 'status', 'org', 'ci', 'token'];
@@ -65,7 +66,12 @@ export class Auth extends BaseCommand {
       return this.setupCI(opts);
     }
 
-    // Default to status if no subcommand
+    // If --org is provided without a subcommand, treat it as 'orgs --org'
+    if (opts.org && !subcommand) {
+      return this.manageOrgs(opts);
+    }
+
+    // Default to status if no subcommand and no --org flag
     if (!subcommand) {
       return this.status();
     }
