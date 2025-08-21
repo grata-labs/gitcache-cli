@@ -1149,7 +1149,7 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       await installCommand.exec();
 
       expect(console.log).toHaveBeenCalledWith(
-        '💡 Run "gitcache setup" to enable cloud registry caching'
+        '💡 Run "gitcache auth setup-ci --org <organization>" to enable cloud registry caching'
       );
     });
 

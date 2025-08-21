@@ -1,11 +1,13 @@
+import * as readline from 'node:readline/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Auth } from '../../commands/auth.js';
 import { AuthManager } from '../../lib/auth-manager.js';
-import * as readline from 'node:readline/promises';
+import { detectCIEnvironment } from '../../lib/ci-environment.js';
 
 // Mock dependencies
 vi.mock('../../lib/auth-manager.js');
 vi.mock('node:readline/promises');
+vi.mock('../../lib/ci-environment.js');
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -35,6 +37,7 @@ const mockReadlineInterface = {
 
 const mockReadlineCreateInterface = vi.mocked(readline.createInterface);
 const mockAuthManager = vi.mocked(AuthManager);
+const mockDetectCIEnvironment = vi.mocked(detectCIEnvironment);
 
 describe('Auth Command', () => {
   let authCommand: Auth;
@@ -155,7 +158,7 @@ describe('Auth Command', () => {
         expect(result).toContain('🔑 Token type: User session');
         expect(result).toContain('gitcache tokens create <name>');
         expect(result).toContain('gitcache tokens list');
-        expect(result).toContain('gitcache setup --list-orgs');
+        expect(result).toContain('gitcache auth orgs');
       });
 
       it('should show authenticated status with CI token', async () => {
@@ -732,7 +735,7 @@ describe('Auth Command', () => {
           idToken: 'token',
           accessToken: 'access',
           refreshToken: 'refresh',
-          // No orgId or organizationId
+          // No orgId or organizationId provided
         }),
       });
 
@@ -762,6 +765,62 @@ describe('Auth Command', () => {
       );
 
       expect(result.orgId).toBe('preferred-org');
+    });
+  });
+
+  describe('authenticateWithToken', () => {
+    it('should store CI token and return success message', () => {
+      const token = 'ci_testorg_abc123def456';
+      const orgId = 'test-org';
+
+      const result = (authCommand as any).authenticateWithToken(token, orgId);
+
+      expect(mockAuthManagerInstance.storeAuthData).toHaveBeenCalledWith({
+        token,
+        orgId,
+        tokenType: 'ci',
+        expiresAt: null, // CI tokens never expire
+      });
+
+      expect(result).toContain('✅ CI token configured successfully!');
+      expect(result).toContain('✅ Registry acceleration enabled');
+      expect(result).toContain(`✅ Connected to organization: ${orgId}`);
+      expect(result).toContain(
+        '🚀 Your CI builds will now use GitCache acceleration.'
+      );
+      expect(result).toContain('💡 Next steps:');
+      expect(result).toContain('• Check status: gitcache auth status');
+      expect(result).toContain('• Test with: gitcache install');
+    });
+
+    it('should handle different organization IDs', () => {
+      const token = 'ci_mycompany_xyz789';
+      const orgId = 'my-company-org';
+
+      const result = (authCommand as any).authenticateWithToken(token, orgId);
+
+      expect(mockAuthManagerInstance.storeAuthData).toHaveBeenCalledWith({
+        token,
+        orgId,
+        tokenType: 'ci',
+        expiresAt: null,
+      });
+
+      expect(result).toContain(`✅ Connected to organization: ${orgId}`);
+    });
+
+    it('should always set expiresAt to null for CI tokens', () => {
+      const token = 'ci_testorg_token123';
+      const orgId = 'test-org';
+
+      (authCommand as any).authenticateWithToken(token, orgId);
+
+      expect(mockAuthManagerInstance.storeAuthData).toHaveBeenCalledWith({
+        token,
+        orgId,
+        tokenType: 'ci',
+        expiresAt: null, // This is the key assertion - CI tokens never expire
+      });
     });
   });
 
@@ -799,10 +858,18 @@ describe('Auth Command', () => {
 
   describe('static properties', () => {
     it('should have correct static configuration', () => {
-      expect(Auth.description).toBe('Manage GitCache authentication');
+      expect(Auth.description).toBe(
+        'Manage GitCache authentication and organization access'
+      );
       expect(Auth.commandName).toBe('auth');
-      expect(Auth.usage).toEqual(['login <email>', 'logout', 'status']);
-      expect(Auth.params).toEqual(['logout', 'status']);
+      expect(Auth.usage).toEqual([
+        'login <email>',
+        'logout',
+        'status',
+        'orgs [--org <organization>]',
+        'setup-ci --org <organization> [--token <ci-token>]',
+      ]);
+      expect(Auth.params).toEqual(['logout', 'status', 'org', 'ci', 'token']);
       expect(Auth.argumentSpec).toEqual({
         type: 'variadic',
         name: 'subcommand',
@@ -883,6 +950,688 @@ describe('Auth Command', () => {
       expect(result).toContain('Error: Invalid email format');
 
       mockGetPasswordInput.mockRestore();
+    });
+  });
+
+  describe('showCIErrorGuidance', () => {
+    it('should provide comprehensive CI setup guidance', () => {
+      const mockCIEnv = {
+        platform: 'GitHub Actions',
+        detected: true,
+        hasToken: false,
+      };
+
+      const result = (authCommand as any).showCIErrorGuidance(mockCIEnv);
+
+      expect(result).toContain('❌ GitCache CI setup failed');
+      expect(result).toContain(
+        'Detected GitHub Actions environment but CI token is invalid.'
+      );
+      expect(result).toContain('To enable GitCache acceleration:');
+      expect(result).toContain(
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/'
+      );
+      expect(result).toContain(
+        '2. Set GITCACHE_TOKEN environment variable in your CI configuration'
+      );
+      expect(result).toContain(
+        '3. Or use: gitcache auth setup-ci --org <organization> --token <ci-token>'
+      );
+      expect(result).toContain(
+        'Your builds will continue using Git sources without acceleration.'
+      );
+    });
+
+    it('should handle different CI platforms', () => {
+      const mockCIEnv = {
+        platform: 'CircleCI',
+        detected: true,
+        hasToken: false,
+      };
+
+      const result = (authCommand as any).showCIErrorGuidance(mockCIEnv);
+
+      expect(result).toContain(
+        'Detected CircleCI environment but CI token is invalid.'
+      );
+      expect(result).toContain('❌ GitCache CI setup failed');
+    });
+
+    it('should provide same guidance for unknown CI environments', () => {
+      const mockCIEnv = {
+        platform: 'Unknown CI',
+        detected: false,
+        hasToken: false,
+      };
+
+      const result = (authCommand as any).showCIErrorGuidance(mockCIEnv);
+
+      expect(result).toContain(
+        'Detected Unknown CI environment but CI token is invalid.'
+      );
+      expect(result).toContain('To enable GitCache acceleration:');
+      expect(result).toContain('GITCACHE_TOKEN environment variable');
+    });
+  });
+
+  describe('setupCI', () => {
+    let mockRegistryClient: any;
+
+    beforeEach(() => {
+      // Mock registry client
+      mockRegistryClient = {
+        validateCIToken: vi.fn(),
+      };
+      vi.spyOn(authCommand as any, 'registryClient', 'get').mockReturnValue(
+        mockRegistryClient
+      );
+
+      // Mock console.log to prevent test output noise
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should throw error when organization is not provided', async () => {
+      await expect(authCommand.exec(['setup-ci'], {})).rejects.toThrow(
+        'Organization name is required for CI setup. Use --org <organization>'
+      );
+    });
+
+    it('should auto-configure with valid environment token', async () => {
+      const envToken = 'ci_testorg_abc123';
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = envToken;
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'GitHub Actions',
+        detected: true,
+        hasToken: true,
+        tokenSource: 'environment',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        organization: 'test-org',
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(mockRegistryClient.validateCIToken).toHaveBeenCalledWith(envToken);
+      expect(mockAuthenticateWithToken).toHaveBeenCalledWith(
+        envToken,
+        'test-org'
+      );
+      expect(result).toContain('✅ CI token configured successfully!');
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      } else {
+        delete process.env.GITCACHE_TOKEN;
+      }
+
+      mockAuthenticateWithToken.mockRestore();
+    });
+
+    it('should warn when token organization differs from provided org', async () => {
+      const envToken = 'ci_different_abc123';
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = envToken;
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'CircleCI',
+        detected: true,
+        hasToken: true,
+        tokenSource: 'environment',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        organization: 'extracted-org',
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'provided-org',
+      });
+
+      expect(mockAuthenticateWithToken).toHaveBeenCalledWith(
+        envToken,
+        'extracted-org'
+      );
+      expect(result).toContain('✅ CI token configured successfully!');
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      } else {
+        delete process.env.GITCACHE_TOKEN;
+      }
+
+      mockAuthenticateWithToken.mockRestore();
+    });
+
+    it('should show error guidance when environment token validation fails', async () => {
+      const envToken = 'ci_testorg_invalid';
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = envToken;
+
+      // The detectCIEnvironment function will return "CI with token" as platform when there's a token
+      const expectedCiEnv = {
+        platform: 'CI with token',
+        detected: true,
+        hasToken: true,
+        tokenSource: 'environment' as const,
+      };
+
+      mockDetectCIEnvironment.mockReturnValue(expectedCiEnv);
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: false,
+        error: 'Token expired',
+      });
+
+      const mockShowCIErrorGuidance = vi
+        .spyOn(authCommand as any, 'showCIErrorGuidance')
+        .mockReturnValue('❌ GitCache CI setup failed');
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(mockShowCIErrorGuidance).toHaveBeenCalledWith(expectedCiEnv);
+      expect(result).toBe('❌ GitCache CI setup failed');
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      } else {
+        delete process.env.GITCACHE_TOKEN;
+      }
+
+      mockShowCIErrorGuidance.mockRestore();
+    });
+
+    it('should handle token validation network errors', async () => {
+      const envToken = 'ci_testorg_abc123';
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = envToken;
+
+      // The detectCIEnvironment function will return "CI with token" as platform when there's a token
+      const expectedCiEnv = {
+        platform: 'CI with token',
+        detected: true,
+        hasToken: true,
+        tokenSource: 'environment' as const,
+      };
+
+      mockDetectCIEnvironment.mockReturnValue(expectedCiEnv);
+
+      mockRegistryClient.validateCIToken.mockRejectedValue(
+        new Error('Network error')
+      );
+
+      const mockShowCIErrorGuidance = vi
+        .spyOn(authCommand as any, 'showCIErrorGuidance')
+        .mockReturnValue('❌ GitCache CI setup failed');
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(mockShowCIErrorGuidance).toHaveBeenCalledWith(expectedCiEnv);
+      expect(result).toBe('❌ GitCache CI setup failed');
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      } else {
+        delete process.env.GITCACHE_TOKEN;
+      }
+
+      mockShowCIErrorGuidance.mockRestore();
+    });
+
+    it('should return error when no CI token is found', async () => {
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      delete process.env.GITCACHE_TOKEN;
+
+      // When no token is present, detectCIEnvironment returns local platform
+      const expectedCiEnv = {
+        platform: 'local',
+        detected: false,
+        hasToken: false,
+        tokenSource: 'none' as const,
+      };
+
+      mockDetectCIEnvironment.mockReturnValue(expectedCiEnv);
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(result).toContain('❌ GitCache CI token not found');
+      expect(result).toContain(
+        'Detected local environment but no GITCACHE_TOKEN found.'
+      );
+      expect(result).toContain('To enable GitCache acceleration:');
+      expect(result).toContain(
+        '1. Generate a CI token at: https://grata-labs.com/gitcache/account/dashboard/'
+      );
+      expect(result).toContain('2. Set GITCACHE_TOKEN environment variable');
+      expect(result).toContain(
+        '3. Or use: gitcache auth setup-ci --org <organization> --token <ci-token>'
+      );
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      }
+    });
+
+    it('should use explicit token when provided', async () => {
+      const explicitToken = 'ci_explicit_token123';
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'Azure Pipelines',
+        detected: true,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        organization: 'test-org',
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'test-org',
+        token: explicitToken,
+      });
+
+      expect(mockRegistryClient.validateCIToken).toHaveBeenCalledWith(
+        explicitToken
+      );
+      expect(mockAuthenticateWithToken).toHaveBeenCalledWith(
+        explicitToken,
+        'test-org'
+      );
+      expect(result).toContain('✅ CI token configured successfully!');
+
+      mockAuthenticateWithToken.mockRestore();
+    });
+
+    it('should reject tokens that do not start with "ci_"', async () => {
+      const invalidToken = 'invalid_token_format';
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'TeamCity',
+        detected: true,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'test-org',
+        token: invalidToken,
+      });
+
+      expect(result).toContain('❌ Invalid CI token format');
+      expect(result).toContain('CI tokens must start with "ci_"');
+      expect(result).toContain(
+        'Generate a new CI token at: https://grata-labs.com/gitcache/account/dashboard/'
+      );
+    });
+
+    it('should handle invalid CI tokens', async () => {
+      const invalidToken = 'ci_invalid_token';
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'Bitbucket Pipelines',
+        detected: true,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: false,
+        error: 'Token not found',
+      });
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'test-org',
+        token: invalidToken,
+      });
+
+      expect(result).toContain('❌ GitCache CI token invalid or expired');
+      expect(result).toContain('Error: Token not found');
+      expect(result).toContain('To fix:');
+      expect(result).toContain('1. Generate a new CI token');
+      expect(result).toContain(
+        '2. Update GITCACHE_TOKEN in your CI environment'
+      );
+      expect(result).toContain(
+        '3. Ensure the token has access to organization: test-org'
+      );
+    });
+
+    it('should use organization from token validation when available', async () => {
+      const validToken = 'ci_valid_token123';
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'Drone CI',
+        detected: true,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        organization: 'token-org',
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'provided-org',
+        token: validToken,
+      });
+
+      expect(mockAuthenticateWithToken).toHaveBeenCalledWith(
+        validToken,
+        'token-org'
+      );
+      expect(result).toContain('✅ CI token configured successfully!');
+
+      mockAuthenticateWithToken.mockRestore();
+    });
+
+    it('should fall back to provided org when token validation has no organization', async () => {
+      const validToken = 'ci_valid_no_org_token';
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'Travis CI',
+        detected: true,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        organization: null,
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'fallback-org',
+        token: validToken,
+      });
+
+      expect(mockAuthenticateWithToken).toHaveBeenCalledWith(
+        validToken,
+        'fallback-org'
+      );
+      expect(result).toContain('✅ CI token configured successfully!');
+
+      mockAuthenticateWithToken.mockRestore();
+    });
+
+    it('should handle API validation errors gracefully', async () => {
+      const validToken = 'ci_network_error_token';
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'Buildbot',
+        detected: true,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      mockRegistryClient.validateCIToken.mockRejectedValue(
+        new Error('API unavailable')
+      );
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'test-org',
+        token: validToken,
+      });
+
+      expect(result).toContain('❌ Failed to validate CI token');
+      expect(result).toContain('Error: API unavailable');
+      expect(result).toContain('Please check:');
+      expect(result).toContain('- Network connectivity to GitCache registry');
+      expect(result).toContain('- Token validity and permissions');
+      expect(result).toContain('- Organization access rights');
+      expect(result).toContain('Your builds will continue using Git sources.');
+    });
+
+    it('should handle non-CI token prefixes from environment', async () => {
+      const nonCIToken = 'user_token_abc123';
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = nonCIToken;
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'Unknown CI',
+        detected: false,
+        hasToken: true,
+        tokenSource: 'environment',
+      });
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(result).toContain('❌ Invalid CI token format');
+      expect(result).toContain('CI tokens must start with "ci_"');
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      } else {
+        delete process.env.GITCACHE_TOKEN;
+      }
+    });
+
+    it('should handle missing organization in token validation but still succeed', async () => {
+      const validToken = 'ci_minimal_token';
+
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'AppVeyor',
+        detected: true,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        // No organization field
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const result = await authCommand.exec(['setup-ci'], {
+        org: 'default-org',
+        token: validToken,
+      });
+
+      expect(mockAuthenticateWithToken).toHaveBeenCalledWith(
+        validToken,
+        'default-org'
+      );
+      expect(result).toContain('✅ CI token configured successfully!');
+
+      mockAuthenticateWithToken.mockRestore();
+    });
+
+    it('should use platform name when ciEnv.detected is truthy', async () => {
+      const envToken = 'ci_testorg_abc123';
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = envToken;
+
+      // Mock CI environment with detected = true
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'Jenkins',
+        detected: true,
+        hasToken: true,
+        tokenSource: 'environment',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        organization: 'test-org',
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const consoleLogSpy = vi.spyOn(console, 'log');
+
+      await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      // Verify that the detected platform name is used in the console output
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '🤖 Auto-configuring for Jenkins environment'
+      );
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      } else {
+        delete process.env.GITCACHE_TOKEN;
+      }
+
+      mockAuthenticateWithToken.mockRestore();
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should use fallback platform name when ciEnv.detected is falsy', async () => {
+      const envToken = 'ci_testorg_abc123';
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = envToken;
+
+      // Mock CI environment with detected = false
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: 'SomeUnknownCI',
+        detected: false,
+        hasToken: true,
+        tokenSource: 'environment',
+      });
+
+      mockRegistryClient.validateCIToken.mockResolvedValue({
+        valid: true,
+        organization: 'test-org',
+      });
+
+      const mockAuthenticateWithToken = vi
+        .spyOn(authCommand as any, 'authenticateWithToken')
+        .mockReturnValue('✅ CI token configured successfully!');
+
+      const consoleLogSpy = vi.spyOn(console, 'log');
+
+      await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      // Verify that the fallback platform name is used in the console output
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '🤖 Auto-configuring for CI with token environment'
+      );
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      } else {
+        delete process.env.GITCACHE_TOKEN;
+      }
+
+      mockAuthenticateWithToken.mockRestore();
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should use fallback "CI" when platform is falsey', async () => {
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock CI environment with falsey platform
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: '',
+        detected: false,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(result).toContain('❌ GitCache CI token not found');
+      expect(result).toContain(
+        'Detected CI environment but no GITCACHE_TOKEN found.'
+      );
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      }
+    });
+
+    it('should use fallback "CI" when platform is null', async () => {
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock CI environment with null platform
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: null as any,
+        detected: false,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(result).toContain('❌ GitCache CI token not found');
+      expect(result).toContain(
+        'Detected CI environment but no GITCACHE_TOKEN found.'
+      );
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      }
+    });
+
+    it('should use fallback "CI" when platform is undefined', async () => {
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      delete process.env.GITCACHE_TOKEN;
+
+      // Mock CI environment with undefined platform
+      mockDetectCIEnvironment.mockReturnValue({
+        platform: undefined as any,
+        detected: false,
+        hasToken: false,
+        tokenSource: 'none',
+      });
+
+      const result = await authCommand.exec(['setup-ci'], { org: 'test-org' });
+
+      expect(result).toContain('❌ GitCache CI token not found');
+      expect(result).toContain(
+        'Detected CI environment but no GITCACHE_TOKEN found.'
+      );
+
+      // Restore environment
+      if (originalEnv) {
+        process.env.GITCACHE_TOKEN = originalEnv;
+      }
     });
   });
 });

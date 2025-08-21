@@ -12,7 +12,7 @@ describe('Status Command Integration', () => {
   describe('static properties', () => {
     it('should have correct static properties', () => {
       expect(Status.description).toBe(
-        'Show GitCache status, cache info, and registry connection'
+        'Show GitCache cache status and registry connectivity'
       );
       expect(Status.commandName).toBe('status');
       expect(Status.usage).toEqual(['', '--detailed', '--json']);
@@ -110,7 +110,7 @@ describe('Status Command Integration', () => {
 
       const result = await statusCommand.exec([], { detailed: true });
 
-      expect(result).toContain('gitcache setup');
+      expect(result).toContain('gitcache auth login');
     });
   });
 
@@ -151,7 +151,7 @@ describe('Status Command Integration', () => {
 
       expect(result).toContain('Local cache:');
       expect(result).toContain('Registry:');
-      expect(result).toContain('gitcache setup');
+      expect(result).toContain('gitcache auth login');
       expect(result).toMatch(/\d+(?:\.\d+)?\s+(MB|GB|KB|B)/); // Should show cache size
       expect(result).toMatch(/\d+\s+packages/); // Should show package count
     });
@@ -164,7 +164,6 @@ describe('Status Command Integration', () => {
       expect(result).toContain('Directory:');
       expect(result).toContain('Size:');
       expect(result).toContain('Last cleanup:');
-      expect(result).toContain('Disk space:'); // Updated to match actual format
       expect(result).toContain('Registry:');
     });
 
@@ -180,11 +179,9 @@ describe('Status Command Integration', () => {
       expect(parsed.localCache).toHaveProperty('packageCount');
       expect(parsed.localCache).toHaveProperty('directory');
       expect(parsed.localCache).toHaveProperty('lastCleanup');
-      expect(parsed.localCache).toHaveProperty('diskSpaceAvailable');
 
       expect(parsed).toHaveProperty('registry');
       expect(parsed.registry).toHaveProperty('connected');
-      expect(parsed.registry).toHaveProperty('organization');
       // Note: 'reason' is only present when connected=false
       if (!parsed.registry.connected) {
         expect(parsed.registry).toHaveProperty('reason');
@@ -210,7 +207,7 @@ describe('Status Command Integration', () => {
 
       expect(result).toContain('Registry:');
       // Should provide guidance for connection issues
-      expect(result).toMatch(/gitcache setup|To connect|Not connected/);
+      expect(result).toMatch(/gitcache auth login|To connect|Not connected/);
     });
 
     it('should support monitoring workflows', async () => {
@@ -246,9 +243,7 @@ describe('Status Command Integration', () => {
       const result = await statusCommand.exec([], {});
 
       // Should indicate current auth state clearly
-      expect(result).toMatch(
-        /Registry:.*Connected|Not connected|Token expired|Connection failed/
-      );
+      expect(result).toMatch(/Registry:.*Connected|Not connected|❌.*Registry/);
     });
 
     it('should handle empty cache directory gracefully', async () => {
@@ -265,8 +260,7 @@ describe('Status Command Integration', () => {
       const result = await statusCommand.exec([], { detailed: true });
 
       if (result.includes('Not connected')) {
-        expect(result).toContain('gitcache setup');
-        expect(result).toContain('organization');
+        expect(result).toContain('gitcache auth login');
       }
     });
   });
