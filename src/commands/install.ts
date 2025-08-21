@@ -233,7 +233,7 @@ export class Install extends BaseCommand {
       // Report cache status
       if (existingTarballs.length > 0) {
         console.log(
-          `✅ ${existingTarballs.length}/${buildableDeps.length} tarballs already cached`
+          `✅ ${existingTarballs.length}/${buildableDeps.length} tarballs already in local cache`
         );
       }
 
@@ -244,7 +244,13 @@ export class Install extends BaseCommand {
         return;
       }
 
-      console.log(`🚀 Building ${missingTarballs.length} missing tarballs...`);
+      console.log(`🚀 Resolving ${missingTarballs.length} missing tarballs...`);
+
+      // Track resolution sources for better messaging
+      const fromLocalCache: string[] = [];
+      const fromRegistry: string[] = [];
+      const builtFromGit: string[] = [];
+      const failed: string[] = [];
 
       // Build only the missing tarballs
       const results = await Promise.allSettled(
@@ -260,6 +266,7 @@ export class Install extends BaseCommand {
             );
             if (cachedTarball) {
               console.log(`📥 Retrieved ${dep.name} from local cache`);
+              fromLocalCache.push(dep.name);
               tarballFound = true;
             } else {
               // 2. Try registry if authenticated (RegistryClient)
@@ -269,6 +276,7 @@ export class Install extends BaseCommand {
                     const registryTarball =
                       await this.registryClient.get(packageId);
                     console.log(`📥 Retrieved ${dep.name} from registry`);
+                    fromRegistry.push(dep.name);
                     // Store in local cache for future use
                     const tarballPath = join(
                       getTarballCachePath(
@@ -302,6 +310,7 @@ export class Install extends BaseCommand {
                     force: true,
                   }
                 );
+                builtFromGit.push(dep.name);
 
                 // Upload to registry for team sharing if authenticated
                 if (this.authManager.isAuthenticated()) {
@@ -333,7 +342,8 @@ export class Install extends BaseCommand {
 
             return { name: dep.name, success: true };
           } catch (error) {
-            console.warn(`⚠️  Failed to build ${dep.name}: ${String(error)}`);
+            console.warn(`⚠️  Failed to resolve ${dep.name}: ${String(error)}`);
+            failed.push(dep.name);
             return { name: dep.name, success: false };
           }
         })
@@ -343,11 +353,29 @@ export class Install extends BaseCommand {
         (result) => result.status === 'fulfilled' && result.value.success
       ).length;
 
-      if (successful > 0) {
+      if (successful > 0 || existingTarballs.length > 0) {
         const totalReady = existingTarballs.length + successful;
-        console.log(
-          `✅ Built ${successful}/${missingTarballs.length} new tarballs`
-        );
+
+        // Show detailed resolution summary - avoid redundancy
+        const summaryParts: string[] = [];
+
+        if (existingTarballs.length > 0) {
+          summaryParts.push(`${existingTarballs.length} local cache`);
+        }
+        if (fromRegistry.length > 0) {
+          summaryParts.push(`${fromRegistry.length} registry`);
+        }
+        if (builtFromGit.length > 0) {
+          summaryParts.push(`${builtFromGit.length} built from git`);
+        }
+        if (failed.length > 0) {
+          summaryParts.push(`${failed.length} failed`);
+        }
+
+        if (summaryParts.length > 0) {
+          console.log(`📊 Sources: ${summaryParts.join(' + ')}`);
+        }
+
         console.log(
           `🚀 ${totalReady}/${buildableDeps.length} tarballs ready! Running install with optimized cache...\n`
         );
