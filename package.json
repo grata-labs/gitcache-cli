@@ -1,6 +1,6 @@
 {
   "name": "@grata-labs/gitcache-cli",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "description": "GitCache – universal Git-dependency cache CLI",
   "main": "index.js",
   "scripts": {

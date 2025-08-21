@@ -1,3 +1,9 @@
+## [1.10.0](https://github.com/grata-labs/gitcache-cli/compare/v1.9.1...v1.10.0) (2025-08-21)
+
+### Features
+
+* create shortcut for org context ([e41b7af](https://github.com/grata-labs/gitcache-cli/commit/e41b7afa9bca0382199e8e3e3dc662aceffb089f))
+
 ## [1.9.1](https://github.com/grata-labs/gitcache-cli/compare/v1.9.0...v1.9.1) (2025-08-21)
 
 
