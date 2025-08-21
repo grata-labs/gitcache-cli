@@ -8,7 +8,7 @@
 [![Integration: Ubuntu](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml/badge.svg)](https://github.com/grata-labs/gitcache-cli/actions/workflows/integration-ubuntu.yml)
 [![npm version](https://img.shields.io/npm/v/@grata-labs/gitcache-cli.svg)](https://www.npmjs.com/package/@grata-labs/gitcache-cli)
 
-**Dramatically speed up npm installs with Git dependencies** by caching and pre-building tarballs locally and sharing them with your team. GitCache automatically detects Git dependencies in your lockfile, builds optimized tarballs, and serves them from local cache or team registry for lightning-fast installs.
+**Dramatically speed up npm installs with Git dependencies** by caching and pre-building tarballs locally and sharing them with your team. GitCache automatically detects Git dependencies in your lockfile, builds optimized tarballs, and serves them from local cache or team registry for up to 4x faster installs after initial cache build.
 
 ## Quick Start & Speed Demo
 
@@ -21,33 +21,34 @@ gitcache auth login your-email@company.com
 
 # First install: GitCache builds and caches tarballs
 time gitcache install
-# → ~50s (npm install + builds Git dependency cache)
+# → Slower than npm (builds Git dependency cache)
 
 # Second install: GitCache uses cached tarballs
 time gitcache install
-# → ~5s (extracts pre-built tarballs from cache)
+# → Much faster (extracts pre-built tarballs from cache)
 
-# Result: 10x faster subsequent installs! 🚀
+# Result: Up to 4x faster subsequent installs! 🚀
+# Note: First run takes longer to build cache
 
 # Add team caching in 90 seconds (optional)
 gitcache tokens create my-ci-token
 # → Add token to CI secrets, done! ✨
 ```
 
-🎯 **See it in action**: [Live demo with working CI](https://github.com/grata-labs/gitcache-demo-repo)
+🎯 **See it in action**: [Live demo with working CI](https://github.com/grata-labs/gitcache-demo-repo) | [Performance benchmarks](https://grata-labs.com/gitcache/performance/)
 
 ### Real Performance Comparison
 
 | Install Method     | First Run | Subsequent Runs | Speed Improvement |
 | ------------------ | --------- | --------------- | ----------------- |
-| `npm install`      | 45s       | 45s* | 1x (baseline)     |
-| `gitcache install` | 52s       | 5s              | **9x faster**   |
+| `npm install`      | Baseline  | Baseline* | 1x (no caching)     |
+| `gitcache install` | ~2x slower | **2-4x faster** | **Significantly faster**   |
 
 _*npm doesn't cache Git dependencies - it re-clones them every time_
 
-_First GitCache run is slower due to cache building, but subsequent runs are dramatically faster_
+_First GitCache run is slower due to cache building, but subsequent runs are significantly faster_
 
-_Benchmarks measured on macOS with typical project containing 3-5 Git dependencies_
+_Performance varies by project size, number of Git dependencies, and system specs_
 
 ## Why GitCache?
 
@@ -347,25 +348,27 @@ gitcache prune --max-size 5GB
 
 ### Real-World Examples
 
-**Project with 5 Git dependencies (typical React app)**:
+**Typical project with Git dependencies**:
 
-- **npm install**: 25 seconds (baseline)
-- **First GitCache install**: 32 seconds → builds and caches all tarballs
-- **Subsequent GitCache installs**: 4 seconds → extracts from cache
-- **Speed improvement**: 6x faster than npm (after cache is built)
+- **npm install**: Baseline performance (re-clones every time)
+- **First GitCache install**: Slower than npm → builds and caches all tarballs
+- **Subsequent GitCache installs**: Much faster → extracts from cache
+- **Speed improvement**: 2-4x faster than npm (varies by project)
+- **Break-even point**: 2-3 runs to recover initial overhead
 
-**Monorepo with 12 Git dependencies**:
+**Benefits scale with usage**:
 
-- **npm install**: 60 seconds (baseline)
-- **First GitCache install**: 78 seconds → parallel builds with caching
-- **Subsequent GitCache installs**: 8 seconds → cache extraction only
-- **Speed improvement**: 7.5x faster than npm (after cache is built)
+- **Projects with more Git dependencies**: Greater speed improvements
+- **Larger repositories**: More time saved per cached dependency
+- **Frequent clean installs**: Compound time savings
+- **Team development**: Shared cache across developers
 
-**CI/CD Pipeline optimization**:
+**Performance factors**:
 
-- **Without GitCache**: 45s per build × 20 builds/day = 15 minutes
-- **With GitCache**: 5s per build × 20 builds/day = 1.7 minutes
-- **Time saved**: 13.3 minutes daily per developer
+- Number and size of Git dependencies
+- Network speed and reliability
+- System specs (CPU, disk speed)
+- CI environment characteristics
 
 ### When GitCache Helps Most
 
@@ -373,15 +376,25 @@ gitcache prune --max-size 5GB
 
 - Projects with multiple Git dependencies
 - Frequent clean installs (`npm ci`, `rm -rf node_modules`)
-- CI/CD pipelines with repeated builds
+- CI/CD pipelines with repeated builds (break-even after 2-3 runs)
 - Development teams with shared dependencies
 - Monorepos with complex dependency graphs
+- Large Git repositories that are slow to clone
 
 ❌ **Limited impact scenarios**:
 
 - Projects with only npm registry dependencies
 - Very stable projects with infrequent installs
 - Single-developer projects with persistent node_modules
+- One-off builds where first-run overhead isn't recovered
+- Projects with few or small Git dependencies
+
+⚠️ **Important considerations**:
+
+- First run takes longer to build cache
+- Benefits require multiple runs to break even
+- Performance varies significantly by project characteristics
+- Most effective with multiple or large Git dependencies
 
 ## Roadmap
 
