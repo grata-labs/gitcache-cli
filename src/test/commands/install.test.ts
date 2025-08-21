@@ -409,7 +409,7 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       await installCommand.exec();
 
       expect(console.log).toHaveBeenCalledWith(
-        '✅ 1/1 tarballs already cached'
+        '✅ 1/1 tarballs already in local cache'
       );
       expect(console.log).toHaveBeenCalledWith(
         '🚀 All tarballs ready! Running install with optimized cache...\n'
@@ -466,7 +466,7 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       await installCommand.exec();
 
       expect(console.log).toHaveBeenCalledWith(
-        '🚀 Building 1 missing tarballs...'
+        '🚀 Resolving 1 missing tarballs...'
       );
       expect(console.log).toHaveBeenCalledWith(
         '🔨 Building new-dep from git repository'
@@ -858,7 +858,7 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       await installCommand.exec();
 
       expect(console.warn).toHaveBeenCalledWith(
-        '⚠️  Failed to build fail-dep: Error: Build failed'
+        '⚠️  Failed to resolve fail-dep: Error: Build failed'
       );
       // Note: The "Built 0/1 new tarballs" message only shows when successful > 0
       // When all builds fail (successful = 0), the message is not shown
@@ -915,7 +915,7 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       await installCommand.exec();
 
       expect(console.warn).toHaveBeenCalledWith(
-        '⚠️  Failed to build string-error-dep: string error'
+        '⚠️  Failed to resolve string-error-dep: string error'
       );
     });
 
@@ -987,9 +987,11 @@ describe('Install Command - Comprehensive Unit Tests', () => {
         '🔨 Building success-dep from git repository'
       );
       expect(console.warn).toHaveBeenCalledWith(
-        '⚠️  Failed to build fail-dep: Error: Build failed'
+        '⚠️  Failed to resolve fail-dep: Error: Build failed'
       );
-      expect(console.log).toHaveBeenCalledWith('✅ Built 1/2 new tarballs');
+      expect(console.log).toHaveBeenCalledWith(
+        '📊 Sources: 1 built from git + 1 failed'
+      );
     });
 
     it('should handle preparation failure gracefully', async () => {
@@ -1830,6 +1832,165 @@ describe('Install Command - Comprehensive Unit Tests', () => {
         'https://github.com/test/repo.git',
         'abc123',
         { force: true }
+      );
+    });
+  });
+
+  describe('Summary reporting', () => {
+    it('should report sources summary when some tarballs are already cached', async () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        error: undefined,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      // Only the tarball for abc123 exists
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        const pathStr = String(path);
+        return (
+          pathStr.includes('package-lock.json') ||
+          pathStr.includes('/mock/tarball/abc123/package.tgz')
+        );
+      });
+      vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+
+      // The Install class imported existsSync at module load time, so spy the
+      // isTarballCached method directly to ensure the code treats abc123 as cached
+      vi.spyOn(Install.prototype as any, 'isTarballCached').mockImplementation(
+        (commitSha: unknown) => commitSha === 'abc123'
+      );
+
+      vi.mocked(scanLockfile).mockReturnValue({
+        hasGitDependencies: true,
+        lockfileVersion: 2,
+        dependencies: [
+          {
+            name: 'cached-dep',
+            gitUrl: 'https://github.com/test/repo.git',
+            reference: 'abc123',
+            preferredUrl: 'git+https://github.com/test/repo.git',
+          },
+          {
+            name: 'new-dep',
+            gitUrl: 'https://github.com/test/repo2.git',
+            reference: 'def456',
+            preferredUrl: 'git+https://github.com/test/repo2.git',
+          },
+        ],
+      });
+
+      vi.mocked(resolveGitReferences).mockResolvedValue([
+        {
+          name: 'cached-dep',
+          gitUrl: 'https://github.com/test/repo.git',
+          reference: 'abc123',
+          resolvedSha: 'abc123',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+        },
+        {
+          name: 'new-dep',
+          gitUrl: 'https://github.com/test/repo2.git',
+          reference: 'def456',
+          resolvedSha: 'def456',
+          preferredUrl: 'git+https://github.com/test/repo2.git',
+        },
+      ]);
+
+      // Ensure builder will build the missing tarball
+      mockTarballBuilder.getCachedTarball.mockReturnValue(null);
+      mockTarballBuilder.buildTarball.mockResolvedValue(undefined);
+      mockAuthManager.isAuthenticated.mockReturnValue(false);
+
+      await installCommand.exec();
+
+      // Expect a summary that includes the local cache entry and the newly built one
+      expect(console.log).toHaveBeenCalledWith(
+        '📊 Sources: 1 local cache + 1 built from git'
+      );
+    });
+
+    it('should include local cache in sources summary when some tarballs exist and others are built', async () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        error: undefined,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        signal: null,
+        output: [null, Buffer.from(''), Buffer.from('')],
+        pid: 12345,
+      });
+
+      // Make getTarballCachePath return unique paths per commit so we can detect exists for one sha
+      vi.mocked(pathUtils.getTarballCachePath).mockImplementation(
+        (commitSha: string) => `/mock/tarball/${commitSha}`
+      );
+
+      // Only the tarball for abc123 exists
+      vi.mocked(nodeFs.existsSync).mockImplementation((path: any) => {
+        const pathStr = String(path);
+        return (
+          pathStr.includes('package-lock.json') ||
+          pathStr.includes('/mock/tarball/abc123/package.tgz')
+        );
+      });
+      vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+
+      // The Install class imported existsSync at module load time, so spy the
+      // isTarballCached method directly to ensure the code treats abc123 as cached
+      vi.spyOn(Install.prototype as any, 'isTarballCached').mockImplementation(
+        (commitSha: unknown) => commitSha === 'abc123'
+      );
+
+      vi.mocked(scanLockfile).mockReturnValue({
+        hasGitDependencies: true,
+        lockfileVersion: 2,
+        dependencies: [
+          {
+            name: 'cached-dep',
+            gitUrl: 'https://github.com/test/repo.git',
+            reference: 'abc123',
+            preferredUrl: 'git+https://github.com/test/repo.git',
+          },
+          {
+            name: 'built-dep',
+            gitUrl: 'https://github.com/test/repo2.git',
+            reference: 'def456',
+            preferredUrl: 'git+https://github.com/test/repo2.git',
+          },
+        ],
+      });
+
+      vi.mocked(resolveGitReferences).mockResolvedValue([
+        {
+          name: 'cached-dep',
+          gitUrl: 'https://github.com/test/repo.git',
+          reference: 'abc123',
+          resolvedSha: 'abc123',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+        },
+        {
+          name: 'built-dep',
+          gitUrl: 'https://github.com/test/repo2.git',
+          reference: 'def456',
+          resolvedSha: 'def456',
+          preferredUrl: 'git+https://github.com/test/repo2.git',
+        },
+      ]);
+
+      // Ensure builder will build the missing tarball
+      mockTarballBuilder.getCachedTarball.mockReturnValue(null);
+      mockTarballBuilder.buildTarball.mockResolvedValue(undefined);
+      mockAuthManager.isAuthenticated.mockReturnValue(false);
+
+      await installCommand.exec();
+
+      // Expect a summary that includes the local cache entry and the newly built one
+      expect(console.log).toHaveBeenCalledWith(
+        '📊 Sources: 1 local cache + 1 built from git'
       );
     });
   });
