@@ -489,7 +489,7 @@ export class Install extends BaseCommand {
           }
         } else {
           console.log(
-            '💡 Run "gitcache setup" to enable cloud registry caching'
+            '💡 Run "gitcache auth setup-ci --org <organization>" to enable cloud registry caching'
           );
         }
       }

@@ -4,7 +4,6 @@ import { Config } from '../commands/config.js';
 import { Install } from '../commands/install.js';
 import { Prune } from '../commands/prune.js';
 import { Scan } from '../commands/scan.js';
-import { Setup } from '../commands/setup.js';
 import { Status } from '../commands/status.js';
 import { Tokens } from '../commands/tokens.js';
 import type { CommandConfig } from './types.js';
@@ -26,10 +25,6 @@ export const commands: Record<string, CommandConfig> = {
   tokens: {
     command: Tokens,
     description: Tokens.description,
-  },
-  setup: {
-    command: Setup,
-    description: Setup.description,
   },
   status: {
     command: Status,
