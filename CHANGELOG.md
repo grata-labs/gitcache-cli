@@ -1,3 +1,10 @@
+## [1.9.1](https://github.com/grata-labs/gitcache-cli/compare/v1.9.0...v1.9.1) (2025-08-21)
+
+
+### Bug Fixes
+
+* fixes messaging to be more accurate ([545251f](https://github.com/grata-labs/gitcache-cli/commit/545251ffd227a0897f357f09dff8e9ae48a5adae))
+
 # [1.9.0](https://github.com/grata-labs/gitcache-cli/compare/v1.8.0...v1.9.0) (2025-08-20)
 
 
