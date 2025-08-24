@@ -4,8 +4,11 @@ import {
   resolveGitReferences,
   type GitDependency,
 } from '../lockfile/scan.js';
-import { createTarballBuilder } from '../lib/tarball-builder.js';
-import { getCacheDir } from '../lib/utils/path.js';
+import {
+  getCacheDir,
+  getPlatformIdentifier,
+  getTarballCachePath,
+} from '../lib/utils/path.js';
 import { existsSync, statSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -138,7 +141,6 @@ export class Analyze extends BaseCommand {
     lockfileVersion: number,
     dependencies: GitDependency[]
   ): Promise<CacheAnalysis> {
-    const tarballBuilder = createTarballBuilder();
     const cacheDir = getCacheDir();
 
     let cached = 0;
@@ -157,9 +159,12 @@ export class Analyze extends BaseCommand {
         unresolvedReferences++;
         issues.push('Failed to resolve Git reference');
       } else {
-        // Check if tarball is cached
-        const cachedTarball = tarballBuilder.getCachedTarball(dep.resolvedSha);
-        isCached = !!cachedTarball;
+        // Check if tarball is cached using the same logic as install command
+        const platform = getPlatformIdentifier();
+        const tarballCacheDir = getTarballCachePath(dep.resolvedSha, platform);
+        const tarballPath = join(tarballCacheDir, 'package.tgz');
+        isCached = existsSync(tarballPath);
+
         if (isCached) {
           cached++;
         } else {
