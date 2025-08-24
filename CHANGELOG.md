@@ -1,3 +1,9 @@
+## [1.10.1](https://github.com/grata-labs/gitcache-cli/compare/v1.10.0...v1.10.1) (2025-08-24)
+
+### Bug Fixes
+
+* make analyze work same as install ([ce3f916](https://github.com/grata-labs/gitcache-cli/commit/ce3f916ac680563d12f1da3bd0ea82c3f9d030d7))
+
 ## [1.10.0](https://github.com/grata-labs/gitcache-cli/compare/v1.9.1...v1.10.0) (2025-08-21)
 
 ### Features
