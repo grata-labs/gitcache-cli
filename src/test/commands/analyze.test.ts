@@ -15,6 +15,8 @@ vi.mock('../../lib/tarball-builder.js', () => ({
 
 vi.mock('../../lib/utils/path.js', () => ({
   getCacheDir: vi.fn(),
+  getPlatformIdentifier: vi.fn(),
+  getTarballCachePath: vi.fn(),
 }));
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -158,16 +160,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync, readdirSync, statSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
       const mockReaddirSync = vi.mocked(readdirSync);
       const mockStatSync = vi.mocked(statSync);
@@ -197,7 +198,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      mockExistsSync.mockReturnValue(true);
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -205,18 +205,17 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      // Mock tarball builder
-      const mockGetCachedTarball = vi.fn();
-      mockGetCachedTarball
-        .mockReturnValueOnce({
-          /* cached tarball data */
-        }) // First dep is cached
-        .mockReturnValueOnce(null) // Second dep is not cached
-        .mockReturnValueOnce(null); // Third dep failed, so no check
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath
+        .mockReturnValueOnce('/fake/cache/tarballs/abc123-darwin-arm64') // cached-dep
+        .mockReturnValueOnce('/fake/cache/tarballs/def456-darwin-arm64'); // uncached-dep
 
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: mockGetCachedTarball,
-      } as never);
+      // Mock file system checks - first dep is cached, second is not
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(true) // cached-dep tarball exists
+        .mockReturnValueOnce(false); // uncached-dep tarball doesn't exist
 
       // Mock cache directory
       mockGetCacheDir.mockReturnValue('/fake/cache');
@@ -250,16 +249,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
       const mockReaddirSync = vi.mocked(readdirSync);
 
@@ -276,7 +274,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      mockExistsSync.mockReturnValue(true);
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -284,9 +281,16 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: vi.fn().mockReturnValue(null),
-      } as never);
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath.mockReturnValue(
+        '/fake/cache/tarballs/abc123-darwin-arm64'
+      );
+
+      // Mock file system checks
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(false); // tarball doesn't exist
 
       mockGetCacheDir.mockReturnValue('/fake/cache');
       mockReaddirSync.mockReturnValue([]);
@@ -303,16 +307,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
       const mockReaddirSync = vi.mocked(readdirSync);
 
@@ -326,7 +329,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      mockExistsSync.mockReturnValue(true);
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -334,21 +336,125 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: vi.fn().mockReturnValue(null),
-      } as never);
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath.mockReturnValue(
+        '/fake/cache/tarballs/abc123-darwin-arm64'
+      );
 
-      mockGetCacheDir.mockReturnValue('/fake/cache');
+      // Mock file system checks
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(false) // tarball doesn't exist
+        .mockReturnValueOnce(true); // tarballs directory exists (for calculateCacheSize)
 
-      // Mock readdirSync to throw an error
-      mockReaddirSync.mockImplementation(() => {
-        throw new Error('Permission denied');
+      const mockCacheDir = '/fake/cache';
+      mockGetCacheDir.mockReturnValue(mockCacheDir);
+
+      // Mock readdirSync to throw an error when called with any path containing 'tarballs'
+      // This handles cross-platform path separator differences
+      mockReaddirSync.mockImplementation((path) => {
+        const pathStr = path.toString();
+        if (pathStr.includes('tarballs')) {
+          throw new Error('Permission denied');
+        }
+        return [];
       });
 
       await analyze.exec([], { lockfile: 'test-lock.json' });
 
       expect(console.warn).toHaveBeenCalledWith(
         'Warning: Could not read cache directory: Error: Permission denied'
+      );
+    });
+
+    it('should report cache size when cache entries exist', async () => {
+      const { scanLockfile, resolveGitReferences } = await import(
+        '../../lockfile/scan.js'
+      );
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
+      const { existsSync, readdirSync, statSync } = await import('node:fs');
+
+      const mockScanLockfile = vi.mocked(scanLockfile);
+      const mockResolveGitReferences = vi.mocked(resolveGitReferences);
+      const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
+      const mockExistsSync = vi.mocked(existsSync);
+      const mockReaddirSync = vi.mocked(readdirSync);
+      const mockStatSync = vi.mocked(statSync);
+
+      // Mock dependencies - all cached
+      const dependencies = [
+        {
+          name: 'cached-dep1',
+          gitUrl: 'git+https://github.com/test/repo1.git',
+          reference: 'main',
+          preferredUrl: 'git+https://github.com/test/repo1.git',
+          resolvedSha: 'abc123',
+        },
+        {
+          name: 'cached-dep2',
+          gitUrl: 'git+https://github.com/test/repo2.git',
+          reference: 'main',
+          preferredUrl: 'git+https://github.com/test/repo2.git',
+          resolvedSha: 'def456',
+        },
+      ];
+
+      mockScanLockfile.mockReturnValue({
+        lockfileVersion: 2,
+        hasGitDependencies: true,
+        dependencies: dependencies,
+      });
+      mockResolveGitReferences.mockResolvedValue(dependencies);
+
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath
+        .mockReturnValueOnce('/fake/cache/tarballs/abc123-darwin-arm64') // cached-dep1
+        .mockReturnValueOnce('/fake/cache/tarballs/def456-darwin-arm64'); // cached-dep2
+
+      // Mock file system checks - both deps are cached
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(true) // cached-dep1 tarball exists
+        .mockReturnValueOnce(true) // cached-dep2 tarball exists
+        .mockReturnValueOnce(true) // tarballs directory exists
+        .mockReturnValueOnce(true) // abc123-darwin-arm64/package.tgz exists
+        .mockReturnValueOnce(true); // def456-darwin-arm64/package.tgz exists
+
+      // Mock cache directory with actual cached tarballs
+      mockGetCacheDir.mockReturnValue('/fake/cache');
+      mockReaddirSync.mockReturnValue([
+        'abc123-darwin-arm64',
+        'def456-darwin-arm64',
+        'other-file.txt', // non-directory file should be ignored
+      ] as never);
+
+      // Mock statSync for cache size calculation
+      mockStatSync
+        .mockReturnValueOnce({ isDirectory: () => true } as never) // abc123-darwin-arm64 is directory
+        .mockReturnValueOnce({ size: 1024 } as never) // package.tgz size for abc123
+        .mockReturnValueOnce({ isDirectory: () => true } as never) // def456-darwin-arm64 is directory
+        .mockReturnValueOnce({ size: 2048 } as never) // package.tgz size for def456
+        .mockReturnValueOnce({ isDirectory: () => false } as never); // other-file.txt is not directory
+
+      await analyze.exec([], { lockfile: 'test-lock.json' });
+
+      // Verify analysis output shows 100% cache
+      expect(console.log).toHaveBeenCalledWith(
+        '├─ Git Dependencies:',
+        '2 found'
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        '├─ Cache Status:',
+        '100% ready (2/2 cached)'
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        '├─ Disk Usage:',
+        '0MB cached tarballs (2 files)'
       );
     });
   });
@@ -358,16 +464,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
       const mockReaddirSync = vi.mocked(readdirSync);
 
@@ -389,7 +494,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      mockExistsSync.mockReturnValue(true);
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -397,12 +501,17 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      // Mock all dependencies as cached
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: vi.fn().mockReturnValue({
-          /* cached data */
-        }),
-      } as never);
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath
+        .mockReturnValueOnce('/fake/cache/tarballs/abc123-darwin-arm64')
+        .mockReturnValueOnce('/fake/cache/tarballs/def456-darwin-arm64');
+
+      // Mock file system checks - both deps are cached
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(true) // dep1 tarball exists
+        .mockReturnValueOnce(true); // dep2 tarball exists
 
       mockGetCacheDir.mockReturnValue('/fake/cache');
       mockReaddirSync.mockReturnValue([]);
@@ -419,16 +528,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
       const mockReaddirSync = vi.mocked(readdirSync);
 
@@ -464,7 +572,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      mockExistsSync.mockReturnValue(true);
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -472,17 +579,21 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      // Mock 2 cached, 2 uncached
-      const mockGetCachedTarball = vi.fn();
-      mockGetCachedTarball
-        .mockReturnValueOnce({ cached: true }) // cached1
-        .mockReturnValueOnce({ cached: true }) // cached2
-        .mockReturnValueOnce(null) // uncached1
-        .mockReturnValueOnce(null); // uncached2
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath
+        .mockReturnValueOnce('/fake/cache/tarballs/abc123-darwin-arm64') // cached1
+        .mockReturnValueOnce('/fake/cache/tarballs/def456-darwin-arm64') // cached2
+        .mockReturnValueOnce('/fake/cache/tarballs/ghi789-darwin-arm64') // uncached1
+        .mockReturnValueOnce('/fake/cache/tarballs/jkl012-darwin-arm64'); // uncached2
 
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: mockGetCachedTarball,
-      } as never);
+      // Mock file system checks - 2 cached, 2 uncached
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(true) // cached1 tarball exists
+        .mockReturnValueOnce(true) // cached2 tarball exists
+        .mockReturnValueOnce(false) // uncached1 tarball doesn't exist
+        .mockReturnValueOnce(false); // uncached2 tarball doesn't exist
 
       mockGetCacheDir.mockReturnValue('/fake/cache');
       mockReaddirSync.mockReturnValue([]);
@@ -552,16 +663,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
       const mockReaddirSync = vi.mocked(readdirSync);
 
@@ -575,7 +685,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      mockExistsSync.mockReturnValue(true);
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -583,9 +692,16 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: vi.fn().mockReturnValue(null),
-      } as never);
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath.mockReturnValue(
+        '/fake/cache/tarballs/abc123-darwin-arm64'
+      );
+
+      // Mock file system checks
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(false); // tarball doesn't exist
 
       mockGetCacheDir.mockReturnValue('/fake/cache');
       mockReaddirSync.mockReturnValue([]);
@@ -621,16 +737,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
       const mockReaddirSync = vi.mocked(readdirSync);
 
@@ -646,7 +761,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      mockExistsSync.mockReturnValue(true);
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -654,9 +768,16 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: vi.fn().mockReturnValue({ cached: true }),
-      } as never);
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath.mockReturnValue(
+        '/fake/cache/tarballs/abc123def456-darwin-arm64'
+      );
+
+      // Mock file system checks - tarball exists (cached)
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(true); // tarball exists (cached)
 
       mockGetCacheDir.mockReturnValue('/fake/cache');
       mockReaddirSync.mockReturnValue([]);
@@ -757,16 +878,15 @@ describe('Analyze Command Unit Tests', () => {
       const { scanLockfile, resolveGitReferences } = await import(
         '../../lockfile/scan.js'
       );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
-      const { getCacheDir } = await import('../../lib/utils/path.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
       const { existsSync } = await import('node:fs');
 
       const mockScanLockfile = vi.mocked(scanLockfile);
       const mockResolveGitReferences = vi.mocked(resolveGitReferences);
-      const mockCreateTarballBuilder = vi.mocked(createTarballBuilder);
       const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
       const mockExistsSync = vi.mocked(existsSync);
 
       const dependencies = [
@@ -779,11 +899,6 @@ describe('Analyze Command Unit Tests', () => {
         },
       ];
 
-      // Mock lockfile exists but cache directory doesn't
-      mockExistsSync
-        .mockReturnValueOnce(true) // lockfile exists
-        .mockReturnValueOnce(false); // cache tarballs dir doesn't exist
-
       mockScanLockfile.mockReturnValue({
         lockfileVersion: 2,
         hasGitDependencies: true,
@@ -791,9 +906,17 @@ describe('Analyze Command Unit Tests', () => {
       });
       mockResolveGitReferences.mockResolvedValue(dependencies);
 
-      mockCreateTarballBuilder.mockReturnValue({
-        getCachedTarball: vi.fn().mockReturnValue(null),
-      } as never);
+      // Mock platform and tarball paths
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath.mockReturnValue(
+        '/fake/cache/tarballs/abc123-darwin-arm64'
+      );
+
+      // Mock lockfile exists but cache directory doesn't
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(false) // tarball doesn't exist
+        .mockReturnValueOnce(false); // cache tarballs dir doesn't exist for calculateCacheSize
 
       mockGetCacheDir.mockReturnValue('/fake/cache');
 
