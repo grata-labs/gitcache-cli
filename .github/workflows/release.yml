@@ -1,6 +1,6 @@
 name: Release
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   release:
@@ -10,22 +10,25 @@ jobs:
       issues: write
       pull-requests: write
       packages: write
+      id-token: write # Required for OIDC
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch full history for semantic-release
+          fetch-depth: 0 # Fetch full history for semantic-release
           token: ${{ secrets.ADMIN_TOKEN }}
       - name: Configure git
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
       - uses: actions/setup-node@v4
-        with: { node-version: 20 , cache: npm , registry-url: 'https://registry.npmjs.org' }
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run build
       - run: npm test
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release
