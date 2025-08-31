@@ -710,7 +710,7 @@ describe('RegistryClient', () => {
 
       await expect(
         registryClient.upload('test-package-id', mockBuffer)
-      ).rejects.toThrow('Not authenticated');
+      ).rejects.toThrow('No authentication token available');
 
       // Should have called fetch twice (getUploadUrl + S3 upload) but failed before confirmUpload
       expect(mockFetch).toHaveBeenCalledTimes(2);

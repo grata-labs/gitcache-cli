@@ -114,6 +114,7 @@ export class Auth extends BaseCommand {
           orgId: authResult.orgId,
           tokenType: 'user',
           expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
+          refreshToken: authResult.refreshToken, // Store refresh token temporarily too
         });
 
         const orgsResult = await tempClient.listOrganizations();
@@ -146,6 +147,7 @@ export class Auth extends BaseCommand {
         orgId: defaultOrgId,
         tokenType: 'user',
         expiresAt,
+        refreshToken: authResult.refreshToken, // Store the refresh token
       });
 
       return [
@@ -189,6 +191,7 @@ export class Auth extends BaseCommand {
       orgId: '',
       tokenType: 'user',
       expiresAt: null,
+      refreshToken: undefined, // Clear refresh token on logout
     });
 
     return '✅ Logged out successfully';

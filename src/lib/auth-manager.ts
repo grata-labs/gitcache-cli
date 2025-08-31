@@ -8,11 +8,13 @@ export interface AuthData {
   orgId: string;
   tokenType: 'user' | 'ci';
   expiresAt: number | null;
+  refreshToken?: string; // Add refresh token for user tokens
 }
 
 export class AuthManager {
   private authData: AuthData | null = null;
   private authPath: string;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor() {
     this.authPath = join(getCacheDir(), 'auth.json');
@@ -160,25 +162,125 @@ export class AuthManager {
   }
 
   /**
-   * Refresh token if needed (placeholder for future implementation)
+   * Refresh token if needed (automatically handles token renewal for user tokens)
    */
   async refreshTokenIfNeeded(): Promise<void> {
-    // For now, we don't support token refresh
-    // Future implementation would handle token renewal for user tokens
-    if (!this.isAuthenticated()) {
+    // If a refresh is already in progress, wait for it to complete
+    if (this.refreshPromise) {
+      await this.refreshPromise;
       return;
     }
 
-    // User tokens close to expiry could be refreshed here
-    if (this.authData!.tokenType === 'user' && this.authData!.expiresAt) {
-      const timeUntilExpiry = this.authData!.expiresAt - Date.now();
-      const oneDayMs = 24 * 60 * 60 * 1000;
-
-      if (timeUntilExpiry < oneDayMs) {
-        // Token expires within a day - could refresh here
-        // For now, just log that refresh would be needed
-      }
+    // Skip CI tokens completely (they don't expire)
+    const envToken = process.env.GITCACHE_TOKEN;
+    if (envToken && envToken.startsWith('ci_')) {
+      return;
     }
+
+    // Check if we have user auth data with refresh token
+    if (
+      !this.authData ||
+      this.authData.tokenType !== 'user' ||
+      !this.authData.refreshToken
+    ) {
+      return;
+    }
+
+    const authData = this.authData;
+
+    // Refresh if token is empty/missing or expires within 5 minutes
+    const timeUntilExpiry = authData.expiresAt
+      ? authData.expiresAt - Date.now()
+      : -1;
+    const timeLeft = 5 * 60 * 1000;
+
+    // Skip refresh if token exists and has more than 5 minutes left
+    if (authData.token && authData.expiresAt && timeUntilExpiry > timeLeft) {
+      return;
+    }
+
+    // Start the refresh operation and store the promise
+    this.refreshPromise = this.performTokenRefresh(authData);
+
+    try {
+      await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  /**
+   * Perform the actual token refresh operation
+   */
+  private async performTokenRefresh(authData: AuthData): Promise<void> {
+    try {
+      console.log('🔄 Refreshing authentication token...');
+      const newAuthData = await this.refreshToken(authData.refreshToken!);
+
+      // Update stored auth data with new tokens
+      this.storeAuthData({
+        ...authData,
+        token: newAuthData.token,
+        expiresAt: newAuthData.expiresAt,
+        refreshToken: newAuthData.refreshToken || authData.refreshToken,
+      });
+
+      console.log('✅ Token refreshed successfully');
+    } catch (error) {
+      console.warn('⚠️  Token refresh failed:', error);
+      // Don't throw - allow the operation to continue with the current token
+      // The token might still be valid for a while
+    }
+  }
+
+  /**
+   * Refresh an authentication token using the refresh token
+   */
+  private async refreshToken(refreshToken: string): Promise<{
+    token: string;
+    expiresAt: number;
+    refreshToken?: string;
+  }> {
+    const apiUrl = this.getApiUrl();
+
+    const response = await fetch(`${apiUrl}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        refreshToken,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: 'Unknown error' }));
+      throw new Error(
+        `Token refresh failed: ${errorData.message || response.statusText}`
+      );
+    }
+
+    const result = await response.json();
+
+    // Extract expiration from the new token
+    let expiresAt: number;
+    try {
+      const jwtPayload = JSON.parse(
+        Buffer.from(result.idToken.split('.')[1], 'base64').toString()
+      );
+      expiresAt = jwtPayload.exp * 1000; // Convert to milliseconds
+    } catch {
+      // Fallback to 1 hour if JWT parsing fails
+      expiresAt = Date.now() + 60 * 60 * 1000;
+    }
+
+    return {
+      token: result.idToken || result.accessToken,
+      expiresAt,
+      refreshToken: result.refreshToken, // May be the same or new refresh token
+    };
   }
 
   /**
@@ -223,6 +325,7 @@ export class AuthManager {
       orgId: '',
       tokenType: 'user',
       expiresAt: null,
+      refreshToken: undefined, // Clear refresh token too
     });
   }
 

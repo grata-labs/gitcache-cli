@@ -406,6 +406,9 @@ export class RegistryClient {
     path: string,
     options: RequestInit = {}
   ): Promise<Response> {
+    // Refresh token if needed before making the request
+    await this.refreshTokenIfNeeded();
+
     const token = this.getAuthToken();
     if (!token) {
       throw new Error('No authentication token available');
@@ -462,19 +465,10 @@ export class RegistryClient {
       throw new Error('No artifact ID in upload metadata');
     }
 
-    const token = this.getAuthToken();
-    if (!token) {
-      throw new Error('Not authenticated');
-    }
-
-    const response = await fetch(
-      `${this.config.apiUrl}/artifacts/${artifactId}/complete`,
+    const response = await this.makeRequest(
+      `/artifacts/${artifactId}/complete`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
       }
     );
 

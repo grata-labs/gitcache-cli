@@ -215,6 +215,7 @@ describe('Auth Command', () => {
           orgId: 'test-org',
           tokenType: 'user',
           expiresAt: expect.any(Number),
+          refreshToken: 'mock-refresh-token',
         });
 
         expect(mockFetch).toHaveBeenCalledWith(
@@ -287,6 +288,7 @@ describe('Auth Command', () => {
           orgId: 'default-org', // Should use defaultOrganization
           tokenType: 'user',
           expiresAt: expect.any(Number),
+          refreshToken: 'mock-refresh-token',
         });
 
         // Should be called twice - once temporarily, once with final data
@@ -472,6 +474,7 @@ describe('Auth Command', () => {
           orgId: 'unknown',
           tokenType: 'user',
           expiresAt: expect.any(Number),
+          refreshToken: 'mock-refresh-token',
         });
 
         mockGetPasswordInput.mockRestore();

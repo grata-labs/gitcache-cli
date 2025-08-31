@@ -24,6 +24,7 @@ describe('Tokens Command', () => {
       getTokenType: vi.fn(),
       getOrgId: vi.fn(),
       getAuthToken: vi.fn(),
+      refreshTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
     };
 
     mockAuthManager.mockImplementation(() => mockAuthManagerInstance);
