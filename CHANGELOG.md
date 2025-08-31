@@ -1,3 +1,9 @@
+## [1.11.0](https://github.com/grata-labs/gitcache-cli/compare/v1.10.1...v1.11.0) (2025-08-31)
+
+### Features
+
+* adds token refreshes ([2cca837](https://github.com/grata-labs/gitcache-cli/commit/2cca837f72dc103cfdaafb06c012e0f9c08e1915))
+
 ## [1.10.1](https://github.com/grata-labs/gitcache-cli/compare/v1.10.0...v1.10.1) (2025-08-24)
 
 ### Bug Fixes
