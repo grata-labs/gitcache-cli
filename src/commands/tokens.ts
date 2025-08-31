@@ -93,6 +93,9 @@ export class Tokens extends BaseCommand {
 
   private async createToken(name: string): Promise<string> {
     try {
+      // Refresh token if needed before making API request
+      await this.authManager.refreshTokenIfNeeded();
+
       const apiUrl = this.getApiUrl();
       const authToken = this.authManager.getAuthToken();
       const orgId = this.authManager.getOrgId();
@@ -153,6 +156,9 @@ export class Tokens extends BaseCommand {
 
   private async listTokens(opts: TokensOptions = {}): Promise<string> {
     try {
+      // Refresh token if needed before making API request
+      await this.authManager.refreshTokenIfNeeded();
+
       const apiUrl = this.getApiUrl();
       const authToken = this.authManager.getAuthToken();
 
@@ -266,6 +272,9 @@ export class Tokens extends BaseCommand {
 
   private async revokeToken(tokenId: string): Promise<string> {
     try {
+      // Refresh token if needed before making API request
+      await this.authManager.refreshTokenIfNeeded();
+
       const apiUrl = this.getApiUrl();
       const authToken = this.authManager.getAuthToken();
 

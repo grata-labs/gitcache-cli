@@ -459,39 +459,42 @@ describe('AuthManager', () => {
   });
 
   describe('refreshTokenIfNeeded', () => {
+    beforeEach(() => {
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.mocked(console.log).mockRestore();
+      vi.mocked(console.warn).mockRestore();
+    });
+
     it('should do nothing when not authenticated', async () => {
       mockExistsSync.mockReturnValue(false);
 
       authManager = new AuthManager();
       await authManager.refreshTokenIfNeeded();
 
-      // Should complete without errors (placeholder implementation)
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should do nothing for CI tokens', async () => {
-      const ciData = {
-        token: 'ci-token',
-        orgId: 'test-org',
-        tokenType: 'ci' as const,
-        expiresAt: null,
-      };
-      mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(JSON.stringify(ciData));
+    it('should do nothing for CI tokens from environment', async () => {
+      process.env.GITCACHE_TOKEN = 'ci_test_token';
 
       authManager = new AuthManager();
       await authManager.refreshTokenIfNeeded();
 
-      // Should complete without errors (placeholder implementation)
       expect(mockFetch).not.toHaveBeenCalled();
+      delete process.env.GITCACHE_TOKEN;
     });
 
-    it('should handle user tokens gracefully (placeholder)', async () => {
+    it('should do nothing when no refresh token is available', async () => {
       const userData = {
         token: 'user-token',
         orgId: 'test-org',
         tokenType: 'user' as const,
-        expiresAt: Date.now() + 1000, // Expires soon
+        expiresAt: Date.now() + 1000,
+        // No refreshToken field
       };
       mockExistsSync.mockReturnValue(true);
       mockReadFileSync.mockReturnValue(JSON.stringify(userData));
@@ -499,9 +502,419 @@ describe('AuthManager', () => {
       authManager = new AuthManager();
       await authManager.refreshTokenIfNeeded();
 
-      // Should complete without errors (placeholder implementation)
-      // Future implementation would handle token refresh
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should skip refresh when token has more than 5 minutes left', async () => {
+      const userData = {
+        token: 'user-token',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
+        refreshToken: 'refresh-token-123',
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      authManager = new AuthManager();
+      await authManager.refreshTokenIfNeeded();
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should refresh when token is empty', async () => {
+      const userData = {
+        token: '',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+        refreshToken: 'refresh-token-123',
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      const mockRefreshResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'new-id-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockRefreshResponse);
+
+      authManager = new AuthManager();
+      await authManager.refreshTokenIfNeeded();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.grata-labs.com/auth/refresh',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: 'refresh-token-123' }),
+        }
+      );
+    });
+
+    it('should refresh when token expires within 5 minutes', async () => {
+      const userData = {
+        token: 'user-token',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() + 2 * 60 * 1000, // 2 minutes from now
+        refreshToken: 'refresh-token-123',
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      const mockRefreshResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'new-id-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockRefreshResponse);
+
+      authManager = new AuthManager();
+      await authManager.refreshTokenIfNeeded();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.grata-labs.com/auth/refresh',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: 'refresh-token-123' }),
+        }
+      );
+    });
+
+    it('should handle concurrent refresh calls', async () => {
+      const userData = {
+        token: '',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: 0,
+        refreshToken: 'refresh-token-123',
+      };
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(userData));
+
+      let resolveRefresh: (value: any) => void;
+      const refreshPromise = new Promise((resolve) => {
+        resolveRefresh = resolve;
+      });
+
+      mockFetch.mockReturnValue(
+        refreshPromise.then(() => ({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              idToken: 'new-id-token',
+              refreshToken: 'new-refresh-token',
+            }),
+        }))
+      );
+
+      authManager = new AuthManager();
+
+      // Start multiple concurrent refresh calls
+      const promise1 = authManager.refreshTokenIfNeeded();
+      const promise2 = authManager.refreshTokenIfNeeded();
+      const promise3 = authManager.refreshTokenIfNeeded();
+
+      // Resolve the mock fetch
+      resolveRefresh!({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'new-id-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      });
+
+      await Promise.all([promise1, promise2, promise3]);
+
+      // Should only call fetch once despite multiple concurrent calls
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('performTokenRefresh', () => {
+    let performTokenRefreshSpy: any;
+
+    beforeEach(() => {
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      authManager = new AuthManager();
+      // Access the private method for testing
+      performTokenRefreshSpy = (authManager as any).performTokenRefresh.bind(
+        authManager
+      );
+    });
+
+    afterEach(() => {
+      vi.mocked(console.log).mockRestore();
+      vi.mocked(console.warn).mockRestore();
+    });
+
+    it('should successfully refresh token and update auth data', async () => {
+      const authData = {
+        token: 'old-token',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() - 1000,
+        refreshToken: 'refresh-token-123',
+      };
+
+      const mockRefreshResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'new-id-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockRefreshResponse);
+
+      const storeAuthDataSpy = vi.spyOn(authManager, 'storeAuthData');
+
+      await performTokenRefreshSpy(authData);
+
+      expect(console.log).toHaveBeenCalledWith(
+        '🔄 Refreshing authentication token...'
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        '✅ Token refreshed successfully'
+      );
+
+      expect(storeAuthDataSpy).toHaveBeenCalledWith({
+        ...authData,
+        token: 'new-id-token',
+        expiresAt: expect.any(Number),
+        refreshToken: 'new-refresh-token',
+      });
+    });
+
+    it('should preserve original refresh token when new one is not provided', async () => {
+      const authData = {
+        token: 'old-token',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() - 1000,
+        refreshToken: 'original-refresh-token',
+      };
+
+      const mockRefreshResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'new-id-token',
+            // No refreshToken in response
+          }),
+      };
+      mockFetch.mockResolvedValue(mockRefreshResponse);
+
+      const storeAuthDataSpy = vi.spyOn(authManager, 'storeAuthData');
+
+      await performTokenRefreshSpy(authData);
+
+      expect(storeAuthDataSpy).toHaveBeenCalledWith({
+        ...authData,
+        token: 'new-id-token',
+        expiresAt: expect.any(Number),
+        refreshToken: 'original-refresh-token', // Should preserve original
+      });
+    });
+
+    it('should handle refresh failure gracefully', async () => {
+      const authData = {
+        token: 'old-token',
+        orgId: 'test-org',
+        tokenType: 'user' as const,
+        expiresAt: Date.now() - 1000,
+        refreshToken: 'refresh-token-123',
+      };
+
+      mockFetch.mockRejectedValue(new Error('Network error'));
+
+      const storeAuthDataSpy = vi.spyOn(authManager, 'storeAuthData');
+
+      // Should not throw
+      await performTokenRefreshSpy(authData);
+
+      expect(console.warn).toHaveBeenCalledWith(
+        '⚠️  Token refresh failed:',
+        expect.any(Error)
+      );
+      expect(storeAuthDataSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refreshToken', () => {
+    let refreshTokenSpy: any;
+
+    beforeEach(() => {
+      authManager = new AuthManager();
+      // Access the private method for testing
+      refreshTokenSpy = (authManager as any).refreshToken.bind(authManager);
+    });
+
+    it('should successfully refresh token with valid response', async () => {
+      const mockResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'new-jwt-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const result = await refreshTokenSpy('test-refresh-token');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.grata-labs.com/auth/refresh',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: 'test-refresh-token' }),
+        }
+      );
+
+      expect(result).toEqual({
+        token: 'new-jwt-token',
+        expiresAt: expect.any(Number),
+        refreshToken: 'new-refresh-token',
+      });
+    });
+
+    it('should use accessToken when idToken is not provided', async () => {
+      const mockResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            accessToken: 'new-access-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const result = await refreshTokenSpy('test-refresh-token');
+
+      expect(result.token).toBe('new-access-token');
+    });
+
+    it('should extract expiration from JWT token', async () => {
+      // Create a mock JWT with known expiration
+      const mockExp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+      const mockJWT = Buffer.from(JSON.stringify({ exp: mockExp })).toString(
+        'base64'
+      );
+      const mockToken = `header.${mockJWT}.signature`;
+
+      const mockResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: mockToken,
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const result = await refreshTokenSpy('test-refresh-token');
+
+      expect(result.expiresAt).toBe(mockExp * 1000); // Should convert to milliseconds
+    });
+
+    it('should use fallback expiration when JWT parsing fails', async () => {
+      const mockResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'invalid-jwt-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const beforeTime = Date.now();
+      const result = await refreshTokenSpy('test-refresh-token');
+      const afterTime = Date.now();
+
+      // Should fallback to 1 hour from now
+      expect(result.expiresAt).toBeGreaterThanOrEqual(
+        beforeTime + 60 * 60 * 1000
+      );
+      expect(result.expiresAt).toBeLessThanOrEqual(afterTime + 60 * 60 * 1000);
+    });
+
+    it('should throw error on failed refresh request', async () => {
+      const mockResponse = {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: () => Promise.resolve({ message: 'Invalid refresh token' }),
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await expect(refreshTokenSpy('test-refresh-token')).rejects.toThrow(
+        'Token refresh failed: Invalid refresh token'
+      );
+    });
+
+    it('should handle JSON parsing error in error response', async () => {
+      const mockResponse = {
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        json: () => Promise.reject(new Error('Invalid JSON')),
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await expect(refreshTokenSpy('test-refresh-token')).rejects.toThrow(
+        'Token refresh failed: Unknown error'
+      );
+    });
+
+    it('should fall back to statusText when errorData.message is falsey', async () => {
+      const mockResponse = {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: () => Promise.resolve({ message: '' }), // Empty message
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await expect(refreshTokenSpy('test-refresh-token')).rejects.toThrow(
+        'Token refresh failed: Unauthorized'
+      );
+    });
+
+    it('should use custom API URL from environment', async () => {
+      process.env.GITCACHE_API_URL = 'https://custom-api.example.com';
+
+      const mockResponse = {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            idToken: 'new-jwt-token',
+            refreshToken: 'new-refresh-token',
+          }),
+      };
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await refreshTokenSpy('test-refresh-token');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://custom-api.example.com/auth/refresh',
+        expect.any(Object)
+      );
+
+      delete process.env.GITCACHE_API_URL;
     });
   });
 
