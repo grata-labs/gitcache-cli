@@ -79,6 +79,6 @@
     "semantic-release": "^24.2.6",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.3"
   }
 }
