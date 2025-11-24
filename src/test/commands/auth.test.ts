@@ -55,7 +55,9 @@ describe('Auth Command', () => {
       storeAuthData: vi.fn(),
     };
 
-    mockAuthManager.mockImplementation(() => mockAuthManagerInstance);
+    mockAuthManager.mockImplementation(function (this: any) {
+      return mockAuthManagerInstance;
+    });
 
     // Mock readline
     mockReadlineCreateInterface.mockReturnValue(mockReadlineInterface as any);
@@ -263,9 +265,11 @@ describe('Auth Command', () => {
           }),
         };
 
-        const mockRegistryClientClass = vi
-          .fn()
-          .mockImplementation(() => mockRegistryClient);
+        const mockRegistryClientClass = vi.fn().mockImplementation(function (
+          this: any
+        ) {
+          return mockRegistryClient;
+        });
 
         // Mock the dynamic import
         vi.doMock('../../lib/registry-client.js', () => ({
@@ -462,6 +466,24 @@ describe('Auth Command', () => {
         const mockGetPasswordInput = vi
           .spyOn(authCommand as any, 'getPasswordInput')
           .mockResolvedValue('test-password');
+
+        // Mock RegistryClient to fail fetching organizations
+        const mockRegistryClient = {
+          listOrganizations: vi
+            .fn()
+            .mockRejectedValue(new Error('Network error')),
+        };
+
+        const mockRegistryClientClass = vi.fn().mockImplementation(function (
+          this: any
+        ) {
+          return mockRegistryClient;
+        });
+
+        // Mock the dynamic import
+        vi.doMock('../../lib/registry-client.js', () => ({
+          RegistryClient: mockRegistryClientClass,
+        }));
 
         const result = await authCommand.exec(['login', 'test@example.com']);
 

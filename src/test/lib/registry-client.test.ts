@@ -19,7 +19,9 @@ const mockAuthManager = {
 
 // Mock AuthManager constructor
 vi.mock('../../lib/auth-manager.js', () => ({
-  AuthManager: vi.fn(() => mockAuthManager),
+  AuthManager: vi.fn(function (this: any) {
+    return mockAuthManager;
+  }),
 }));
 
 // Mock fetch globally
