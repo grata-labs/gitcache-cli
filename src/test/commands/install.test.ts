@@ -53,10 +53,18 @@ describe('Install Command - Comprehensive Unit Tests', () => {
     };
     mockGitCache = {};
 
-    vi.mocked(TarballBuilder).mockImplementation(() => mockTarballBuilder);
-    vi.mocked(RegistryClient).mockImplementation(() => mockRegistryClient);
-    vi.mocked(AuthManager).mockImplementation(() => mockAuthManager);
-    vi.mocked(GitCache).mockImplementation(() => mockGitCache);
+    vi.mocked(TarballBuilder).mockImplementation(function (this: any) {
+      return mockTarballBuilder;
+    });
+    vi.mocked(RegistryClient).mockImplementation(function (this: any) {
+      return mockRegistryClient;
+    });
+    vi.mocked(AuthManager).mockImplementation(function (this: any) {
+      return mockAuthManager;
+    });
+    vi.mocked(GitCache).mockImplementation(function (this: any) {
+      return mockGitCache;
+    });
 
     // Setup path utils mocks
     vi.mocked(pathUtils.getCacheDir).mockReturnValue('/mock/cache');

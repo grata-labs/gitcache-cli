@@ -32,7 +32,9 @@ describe('Auth Command - Password Input TTY Handling', () => {
       storeAuthData: vi.fn(),
     };
 
-    mockAuthManager.mockImplementation(() => mockAuthManagerInstance);
+    mockAuthManager.mockImplementation(function (this: any) {
+      return mockAuthManagerInstance;
+    });
 
     // Create detailed mocks for stdin/stdout
     mockStdoutWrite = vi.fn().mockReturnValue(true);

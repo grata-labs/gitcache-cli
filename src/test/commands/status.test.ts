@@ -37,7 +37,9 @@ describe('Status Command', () => {
       validateToken: vi.fn(),
     };
 
-    mockAuthManager.mockImplementation(() => mockAuthManagerInstance);
+    mockAuthManager.mockImplementation(function (this: any) {
+      return mockAuthManagerInstance;
+    });
 
     status = new Status();
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
