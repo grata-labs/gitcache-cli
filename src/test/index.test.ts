@@ -4,22 +4,26 @@ import { npmInstall } from '../lib/api.js';
 
 // Mock the Install command
 vi.mock('../commands/install.js', () => ({
-  Install: vi.fn().mockImplementation(() => ({
-    exec: vi.fn(),
-  })),
+  Install: vi.fn().mockImplementation(function (this: any) {
+    return {
+      exec: vi.fn(),
+    };
+  }),
 }));
 
 // Mock commander to avoid actual CLI execution
 vi.mock('commander', () => ({
-  Command: vi.fn().mockImplementation(() => ({
-    name: vi.fn().mockReturnThis(),
-    description: vi.fn().mockReturnThis(),
-    version: vi.fn().mockReturnThis(),
-    command: vi.fn().mockReturnThis(),
-    option: vi.fn().mockReturnThis(),
-    action: vi.fn().mockReturnThis(),
-    parseAsync: vi.fn().mockResolvedValue(undefined),
-  })),
+  Command: vi.fn().mockImplementation(function (this: any) {
+    return {
+      name: vi.fn().mockReturnThis(),
+      description: vi.fn().mockReturnThis(),
+      version: vi.fn().mockReturnThis(),
+      command: vi.fn().mockReturnThis(),
+      option: vi.fn().mockReturnThis(),
+      action: vi.fn().mockReturnThis(),
+      parseAsync: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 const originalEnv = process.env;
@@ -35,9 +39,9 @@ describe('gitcache CLI', () => {
       const { Install } = await import('../commands/install.js');
       const MockInstall = vi.mocked(Install);
       const mockExec = vi.fn();
-      MockInstall.mockImplementation(
-        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Install>
-      );
+      MockInstall.mockImplementation(function (this: any) {
+        return { exec: mockExec } as unknown as InstanceType<typeof Install>;
+      });
 
       const args = ['--save-dev', 'typescript'];
       npmInstall(args);
@@ -50,9 +54,9 @@ describe('gitcache CLI', () => {
       const { Install } = await import('../commands/install.js');
       const MockInstall = vi.mocked(Install);
       const mockExec = vi.fn();
-      MockInstall.mockImplementation(
-        () => ({ exec: mockExec }) as unknown as InstanceType<typeof Install>
-      );
+      MockInstall.mockImplementation(function (this: any) {
+        return { exec: mockExec } as unknown as InstanceType<typeof Install>;
+      });
 
       npmInstall();
 
@@ -85,15 +89,16 @@ describe('gitcache CLI', () => {
         addHelpText: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockResolvedValue(undefined),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function (this: any) {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       const mockInstallExec = vi.fn();
-      MockInstall.mockImplementation(
-        () =>
-          ({ exec: mockInstallExec }) as unknown as InstanceType<typeof Install>
-      );
+      MockInstall.mockImplementation(function (this: any) {
+        return { exec: mockInstallExec } as unknown as InstanceType<
+          typeof Install
+        >;
+      });
 
       await main();
 
@@ -132,9 +137,9 @@ describe('gitcache CLI', () => {
         addHelpText: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockRejectedValue(new Error('Test error')),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function (this: any) {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       const consoleErrorSpy = vi
         .spyOn(console, 'error')
@@ -172,9 +177,9 @@ describe('gitcache CLI', () => {
         addHelpText: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockResolvedValue(undefined),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function (this: any) {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       await main();
 

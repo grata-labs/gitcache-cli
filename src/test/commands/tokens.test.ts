@@ -27,7 +27,9 @@ describe('Tokens Command', () => {
       refreshTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
     };
 
-    mockAuthManager.mockImplementation(() => mockAuthManagerInstance);
+    mockAuthManager.mockImplementation(function (this: any) {
+      return mockAuthManagerInstance;
+    });
 
     tokensCommand = new Tokens();
   });

@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
+    exclude: ['dist/**', 'node_modules/**', 'coverage/**'],
     // Ensure sequential execution when debugging
     pool: 'forks',
     poolOptions: {

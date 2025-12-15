@@ -1439,7 +1439,9 @@ describe('AuthManager', () => {
       // Setup fresh state for each storeAuthData test
       mockExistsSync.mockReturnValue(false);
       mockWriteFileSync.mockClear();
+      mockWriteFileSync.mockImplementation(() => {});
       mockMkdirSync.mockClear();
+      mockMkdirSync.mockImplementation(() => undefined);
     });
 
     it('should store valid user auth data successfully', () => {
@@ -1753,6 +1755,9 @@ describe('AuthManager', () => {
       // Setup fresh state for each updateOrgContext test
       mockExistsSync.mockReturnValue(false);
       mockWriteFileSync.mockClear();
+      mockWriteFileSync.mockImplementation(() => {});
+      mockMkdirSync.mockClear();
+      mockMkdirSync.mockImplementation(() => undefined);
       mockMkdirSync.mockClear();
     });
 
