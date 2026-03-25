@@ -82,7 +82,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - run: npm ci
       - run: npm run lint
@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit --incremental false
@@ -107,7 +107,7 @@ jobs:
   # ============================================================================
 
   test-primary:
-    name: 'Core Tests: Ubuntu + Node 20'
+    name: 'Core Tests: Ubuntu + Node 22'
     needs: [changes, lint, typecheck]
     runs-on: ubuntu-latest
     if: (github.event.pull_request.draft != true || github.event_name == 'push') && needs.changes.outputs.has-code == 'true'
@@ -115,15 +115,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - run: npm ci
       - run: npm run test:ci:coverage
       - name: Upload primary coverage
         uses: codecov/codecov-action@v5
         with:
-          flags: primary,ubuntu,node20
-          name: ubuntu-node20
+          flags: primary,ubuntu,node22
+          name: ubuntu-node22
         if: always()
 
   build-primary:
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -155,7 +155,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - run: npm ci
       - name: Run Windows integration tests
@@ -178,18 +178,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Skip Ubuntu + Node 20 since we already tested it in Stage 2
+        # Skip Ubuntu + Node 22 since we already tested it in Stage 2
         include:
           - os: ubuntu-latest
-            node: 22
+            node: 24
           - os: windows-latest
-            node: 20
+            node: 22
           - os: macos-latest # Intel Mac
-            node: 20
-          - os: macos-14 # Apple Silicon
-            node: 20
+            node: 22
           - os: macos-14 # Apple Silicon
             node: 22
+          - os: macos-14 # Apple Silicon
+            node: 24
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -219,7 +219,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - run: npm ci
       - name: Run tests with coverage
@@ -227,8 +227,8 @@ jobs:
       - name: Upload test-only coverage
         uses: codecov/codecov-action@v5
         with:
-          flags: tests-only,ubuntu,node20
-          name: tests-only-ubuntu-node20
+          flags: tests-only,ubuntu,node22
+          name: tests-only-ubuntu-node22
         if: always()
       - name: Validate tests summary
         run: |
@@ -281,7 +281,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - run: npm ci
       - name: Download all coverage reports
@@ -292,7 +292,7 @@ jobs:
       - name: Display coverage summary
         run: |
           echo "📊 Coverage Summary:"
-          echo "- Primary (Ubuntu + Node 20): Uploaded to Codecov with 'primary' flag"
+          echo "- Primary (Ubuntu + Node 22): Uploaded to Codecov with 'primary' flag"
           echo "- Extended (Cross-platform): Uploaded to Codecov with 'extended' flag"
           echo "- View detailed reports at: https://codecov.io/gh/${{ github.repository }}"
           echo ""
