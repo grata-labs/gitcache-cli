@@ -44,7 +44,8 @@ describe('Auth Command', () => {
   let mockAuthManagerInstance: any;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    vi.doUnmock('../../lib/registry-client.js');
 
     // Setup mock AuthManager instance
     mockAuthManagerInstance = {
@@ -55,7 +56,9 @@ describe('Auth Command', () => {
       storeAuthData: vi.fn(),
     };
 
-    mockAuthManager.mockImplementation(() => mockAuthManagerInstance);
+    mockAuthManager.mockImplementation(function () {
+      return mockAuthManagerInstance;
+    });
 
     // Mock readline
     mockReadlineCreateInterface.mockReturnValue(mockReadlineInterface as any);
@@ -263,9 +266,9 @@ describe('Auth Command', () => {
           }),
         };
 
-        const mockRegistryClientClass = vi
-          .fn()
-          .mockImplementation(() => mockRegistryClient);
+        const mockRegistryClientClass = vi.fn().mockImplementation(function () {
+          return mockRegistryClient;
+        });
 
         // Mock the dynamic import
         vi.doMock('../../lib/registry-client.js', () => ({
@@ -293,6 +296,86 @@ describe('Auth Command', () => {
 
         // Should be called twice - once temporarily, once with final data
         expect(mockAuthManagerInstance.storeAuthData).toHaveBeenCalledTimes(2);
+
+        mockGetPasswordInput.mockRestore();
+      });
+
+      it('should not override orgId when defaultOrganization is falsy', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            idToken: 'mock-id-token',
+            accessToken: 'mock-access-token',
+            refreshToken: 'mock-refresh-token',
+            organizationId: 'auth-org',
+          }),
+        });
+
+        const mockGetPasswordInput = vi
+          .spyOn(authCommand as any, 'getPasswordInput')
+          .mockResolvedValue('test-password');
+
+        const mockRegistryClient = {
+          listOrganizations: vi.fn().mockResolvedValue({
+            organizations: [{ id: 'auth-org', name: 'Auth Org' }],
+            defaultOrganization: '', // falsy
+          }),
+        };
+
+        const mockRegistryClientClass = vi.fn().mockImplementation(function () {
+          return mockRegistryClient;
+        });
+
+        vi.doMock('../../lib/registry-client.js', () => ({
+          RegistryClient: mockRegistryClientClass,
+        }));
+
+        const result = await authCommand.exec(['login', 'test@example.com']);
+
+        expect(result).toContain('✅ Authentication successful!');
+        // Should use the original authResult.orgId since defaultOrganization is falsy
+        expect(result).toContain('🏢 Organization: auth-org');
+        expect(result).not.toContain('(your default)');
+
+        mockGetPasswordInput.mockRestore();
+      });
+
+      it('should keep original orgMessage when defaultOrgId equals authResult.orgId', async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            idToken: 'mock-id-token',
+            accessToken: 'mock-access-token',
+            refreshToken: 'mock-refresh-token',
+            organizationId: 'same-org',
+          }),
+        });
+
+        const mockGetPasswordInput = vi
+          .spyOn(authCommand as any, 'getPasswordInput')
+          .mockResolvedValue('test-password');
+
+        const mockRegistryClient = {
+          listOrganizations: vi.fn().mockResolvedValue({
+            organizations: [{ id: 'same-org', name: 'Same Org' }],
+            defaultOrganization: 'same-org', // same as authResult.orgId
+          }),
+        };
+
+        const mockRegistryClientClass = vi.fn().mockImplementation(function () {
+          return mockRegistryClient;
+        });
+
+        vi.doMock('../../lib/registry-client.js', () => ({
+          RegistryClient: mockRegistryClientClass,
+        }));
+
+        const result = await authCommand.exec(['login', 'test@example.com']);
+
+        expect(result).toContain('✅ Authentication successful!');
+        expect(result).toContain('🏢 Organization: same-org');
+        // Should NOT say "(your default)" since it matches the auth org
+        expect(result).not.toContain('(your default)');
 
         mockGetPasswordInput.mockRestore();
       });
@@ -636,6 +719,26 @@ describe('Auth Command', () => {
       const result = await (authCommand as any).getPasswordInput();
 
       expect(result).toBe('pass');
+    });
+
+    it('should handle backspace on empty password', async () => {
+      Object.defineProperty(process.stdin, 'isTTY', { value: true });
+
+      mockStdin.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => {
+            callback(String.fromCharCode(127)); // Backspace on empty password
+            callback(String.fromCharCode(8)); // Another backspace variant on empty
+            callback('a');
+            callback('b');
+            callback('\r'); // Enter
+          }, 0);
+        }
+      });
+
+      const result = await (authCommand as any).getPasswordInput();
+
+      expect(result).toBe('ab');
     });
 
     it('should filter out non-printable characters', async () => {

@@ -40,7 +40,7 @@ describe('AuthManager', () => {
   let authManager: AuthManager;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
 
     // Setup consistent mocks
     mockGetCacheDir.mockReturnValue(TEST_CACHE_DIR);

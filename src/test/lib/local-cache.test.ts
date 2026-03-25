@@ -711,6 +711,42 @@ describe('LocalCache', () => {
         (smallLimitCache as any).enforceSize()
       ).resolves.toBeUndefined();
     });
+
+    it('should handle metadata file deletion failure during eviction', async () => {
+      const smallLimitCache = new LocalCache({ maxSizeMB: 1 });
+
+      // Setup mocks for getAllCacheFiles (called twice: once for getStats, once for enforceSize)
+      let callCount = 0;
+      mockFs.readdir.mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          if (callCount === 1) return Promise.resolve(['ab'] as any);
+          if (callCount === 2) return Promise.resolve(['file1.cache'] as any);
+        } else {
+          if (callCount === 3) return Promise.resolve(['ab'] as any);
+          if (callCount === 4) return Promise.resolve(['file1.cache'] as any);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockFs.stat.mockResolvedValue({
+        size: 2 * 1024 * 1024,
+        mtime: new Date(),
+      } as any);
+
+      // First unlink (cache file) succeeds, second unlink (meta file) rejects
+      // The .catch(() => {}) on meta unlink should swallow the error
+      mockFs.unlink
+        .mockResolvedValueOnce(undefined) // cache file deletion succeeds
+        .mockRejectedValueOnce(new Error('ENOENT: meta file not found')); // meta file deletion fails
+
+      await expect(
+        (smallLimitCache as any).enforceSize()
+      ).resolves.toBeUndefined();
+
+      // Both unlink calls should have been made
+      expect(mockFs.unlink).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('getAllCacheFiles (private)', () => {

@@ -4,14 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // Ensure sequential execution when debugging
-    pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork:
-          process.env.NODE_ENV === 'test' && process.argv.includes('--inspect'),
-      },
-    },
+    exclude: ['dist/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

@@ -217,6 +217,30 @@ describe('prune', () => {
       expect(entries).toEqual([]);
     });
 
+    it('should skip non-directory entries in tarballs dir', () => {
+      const tarballsDir = join(tempTestDir, 'tarballs');
+      mkdirSync(tarballsDir, { recursive: true });
+
+      // Create a regular file (not a directory) in the tarballs directory
+      writeFileSync(join(tarballsDir, 'stray-file.txt'), 'not a directory');
+
+      const entries = getCacheEntries();
+      expect(entries).toEqual([]);
+    });
+
+    it('should skip directory names without a hyphen', () => {
+      const tarballsDir = join(tempTestDir, 'tarballs');
+      mkdirSync(tarballsDir, { recursive: true });
+
+      // Create a directory whose name has no hyphen (parts.length < 2)
+      const noHyphenDir = join(tarballsDir, 'abc123def456');
+      mkdirSync(noHyphenDir, { recursive: true });
+      writeFileSync(join(noHyphenDir, 'package.tgz'), 'content');
+
+      const entries = getCacheEntries();
+      expect(entries).toEqual([]);
+    });
+
     it('should handle cache directory read errors gracefully', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 

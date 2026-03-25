@@ -201,6 +201,93 @@ describe('TarballBuilder', () => {
   });
 
   describe('buildTarball', () => {
+    it('should build new tarball when cached tarball exists but metadata is missing', async () => {
+      const { spawnSync } = await import('node:child_process');
+      const mockSpawnSync = vi.mocked(spawnSync);
+
+      const commitSha = 'abc123';
+      const gitUrl = 'https://github.com/test/repo.git';
+      const platform = 'darwin-arm64';
+      const cacheDir = join(
+        tempTestDir,
+        'tarballs',
+        `${commitSha}-${platform}`
+      );
+
+      // Create cache directory with tarball but NO metadata.json
+      mkdirSync(cacheDir, { recursive: true });
+      writeFileSync(join(cacheDir, 'package.tgz'), 'existing tarball');
+      // Intentionally NOT writing metadata.json - this makes readTarballMetadata return null
+
+      let mockWorkingDir = '';
+
+      mockSpawnSync.mockImplementation(
+        (command: string, args?: readonly string[], _options?: unknown) => {
+          const argsArray = args || [];
+
+          if (command === 'git' && argsArray[0] === 'clone') {
+            const targetDir = argsArray[argsArray.length - 1];
+            mockWorkingDir = targetDir;
+            mkdirSync(targetDir, { recursive: true });
+            writeFileSync(
+              join(targetDir, 'package.json'),
+              JSON.stringify({ name: 'test-package', version: '1.0.0' })
+            );
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: '',
+              stderr: '',
+            };
+          }
+
+          if (command === 'npm' && argsArray.includes('pack')) {
+            const tarballName = 'test-package-1.0.0.tgz';
+            const tarballPath = join(mockWorkingDir, tarballName);
+            writeFileSync(tarballPath, 'fake tarball content');
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: `${tarballName}\n`,
+              stderr: '',
+            };
+          }
+
+          if (command === 'shasum') {
+            return {
+              status: 0,
+              signal: null,
+              output: [],
+              pid: 123,
+              stdout: 'abc123hash  filename\n',
+              stderr: '',
+            };
+          }
+
+          return {
+            status: 0,
+            signal: null,
+            output: [],
+            pid: 123,
+            stdout: '',
+            stderr: '',
+          };
+        }
+      );
+
+      // force: false, tarball exists but metadata is missing → should rebuild
+      const result = await builder.buildTarball(gitUrl, commitSha);
+
+      expect(result.commitSha).toBe(commitSha);
+      expect(result.gitUrl).toBe(gitUrl);
+      // The build process should have been triggered (spawnSync called)
+      expect(mockSpawnSync).toHaveBeenCalled();
+    });
+
     it('should return cached tarball when force is false and tarball exists', async () => {
       const { execSync } = await import('node:child_process');
       const mockExecSync = vi.mocked(execSync);
@@ -1037,9 +1124,8 @@ describe('TarballBuilder', () => {
     });
 
     // Create a new builder instance after mocking
-    const { createTarballBuilder } = await import(
-      '../../lib/tarball-builder.js'
-    );
+    const { createTarballBuilder } =
+      await import('../../lib/tarball-builder.js');
     const testBuilder = createTarballBuilder();
 
     const cached = testBuilder.getCachedTarball(gitUrl, commitSha);
