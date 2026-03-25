@@ -1,3 +1,17 @@
+## [2.0.0](https://github.com/grata-labs/gitcache-cli/compare/v1.11.0...v2.0.0) (2026-03-25)
+
+### ⚠ BREAKING CHANGES
+
+* Minimum supported Node.js version is now v22.
+
+ - Update engines.node from >=20 to >=22
+ - Update all workflow node-version from 20 to 22
+ - Update CI matrix: replace Node 20 entries with Node 22/24
+
+### Features
+
+* bump minimum Node.js to v22, update CI matrix ([05787b9](https://github.com/grata-labs/gitcache-cli/commit/05787b946af4055f4f423315f768231535038360))
+
 ## [1.11.0](https://github.com/grata-labs/gitcache-cli/compare/v1.10.1...v1.11.0) (2025-08-31)
 
 ### Features
