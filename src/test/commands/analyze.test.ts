@@ -157,9 +157,8 @@ describe('Analyze Command Unit Tests', () => {
 
   describe('Cache analysis functionality', () => {
     it('should analyze cache status with mixed dependencies', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync, statSync } = await import('node:fs');
@@ -246,9 +245,8 @@ describe('Analyze Command Unit Tests', () => {
     });
 
     it('should detect npm v7+ bug in dependencies', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
@@ -304,9 +302,8 @@ describe('Analyze Command Unit Tests', () => {
     });
 
     it('should handle cache directory read errors gracefully', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
@@ -369,9 +366,8 @@ describe('Analyze Command Unit Tests', () => {
     });
 
     it('should report cache size when cache entries exist', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync, statSync } = await import('node:fs');
@@ -457,13 +453,127 @@ describe('Analyze Command Unit Tests', () => {
         '0MB cached tarballs (2 files)'
       );
     });
+
+    it('should handle differing packageJsonUrl and lockfileUrl without SSH/HTTPS mismatch', async () => {
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
+      const { existsSync, readdirSync } = await import('node:fs');
+
+      const mockScanLockfile = vi.mocked(scanLockfile);
+      const mockResolveGitReferences = vi.mocked(resolveGitReferences);
+      const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
+      const mockExistsSync = vi.mocked(existsSync);
+      const mockReaddirSync = vi.mocked(readdirSync);
+
+      // Dep with different packageJsonUrl and lockfileUrl but NOT ssh→https mismatch
+      const dependencies = [
+        {
+          name: 'diff-url-dep',
+          gitUrl: 'git+https://github.com/test/repo.git',
+          reference: 'main',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+          resolvedSha: 'abc123',
+          packageJsonUrl: 'git+https://github.com/test/repo.git#v1.0.0',
+          lockfileUrl: 'git+https://github.com/test/repo.git#abc123',
+        },
+      ];
+
+      mockScanLockfile.mockReturnValue({
+        lockfileVersion: 2,
+        hasGitDependencies: true,
+        dependencies: dependencies,
+      });
+      mockResolveGitReferences.mockResolvedValue(dependencies);
+
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath.mockReturnValue(
+        '/fake/cache/tarballs/abc123-darwin-arm64'
+      );
+
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(false); // tarball doesn't exist
+
+      mockGetCacheDir.mockReturnValue('/fake/cache');
+      mockReaddirSync.mockReturnValue([]);
+
+      await analyze.exec([], { lockfile: 'test-lock.json' });
+
+      // Should NOT detect npm v7+ SSH bug
+      expect(console.log).not.toHaveBeenCalledWith(
+        '├─ npm v7+ Issues:',
+        expect.anything()
+      );
+    });
+
+    it('should handle cache directory entry without package.tgz', async () => {
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
+      const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
+        await import('../../lib/utils/path.js');
+      const { existsSync, readdirSync, statSync } = await import('node:fs');
+
+      const mockScanLockfile = vi.mocked(scanLockfile);
+      const mockResolveGitReferences = vi.mocked(resolveGitReferences);
+      const mockGetCacheDir = vi.mocked(getCacheDir);
+      const mockGetPlatformIdentifier = vi.mocked(getPlatformIdentifier);
+      const mockGetTarballCachePath = vi.mocked(getTarballCachePath);
+      const mockExistsSync = vi.mocked(existsSync);
+      const mockReaddirSync = vi.mocked(readdirSync);
+      const mockStatSync = vi.mocked(statSync);
+
+      const dependencies = [
+        {
+          name: 'test-dep',
+          gitUrl: 'git+https://github.com/test/repo.git',
+          reference: 'main',
+          preferredUrl: 'git+https://github.com/test/repo.git',
+          resolvedSha: 'abc123',
+        },
+      ];
+
+      mockScanLockfile.mockReturnValue({
+        lockfileVersion: 2,
+        hasGitDependencies: true,
+        dependencies: dependencies,
+      });
+      mockResolveGitReferences.mockResolvedValue(dependencies);
+
+      mockGetPlatformIdentifier.mockReturnValue('darwin-arm64');
+      mockGetTarballCachePath.mockReturnValue(
+        '/fake/cache/tarballs/abc123-darwin-arm64'
+      );
+
+      mockExistsSync
+        .mockReturnValueOnce(true) // lockfile exists
+        .mockReturnValueOnce(false) // tarball doesn't exist for dep
+        .mockReturnValueOnce(true) // tarballs directory exists
+        .mockReturnValueOnce(false); // package.tgz does NOT exist inside the entry dir
+
+      mockGetCacheDir.mockReturnValue('/fake/cache');
+      mockReaddirSync.mockReturnValue(['abc123-darwin-arm64'] as never);
+
+      // Entry is a directory but has no package.tgz inside
+      mockStatSync.mockReturnValueOnce({ isDirectory: () => true } as never);
+
+      await analyze.exec([], { lockfile: 'test-lock.json' });
+
+      // Should report 0 cached tarballs since no package.tgz found
+      expect(console.log).not.toHaveBeenCalledWith(
+        '├─ Disk Usage:',
+        expect.stringContaining('1 file')
+      );
+    });
   });
 
   describe('Performance estimation', () => {
     it('should provide correct cache percentage for different cache ratios', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
@@ -525,9 +635,8 @@ describe('Analyze Command Unit Tests', () => {
     });
 
     it('should calculate correct percentages for partial cache scenarios', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
@@ -607,12 +716,10 @@ describe('Analyze Command Unit Tests', () => {
     });
 
     it('should handle dependencies without resolved SHA', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
+      const { createTarballBuilder } =
+        await import('../../lib/tarball-builder.js');
       const { getCacheDir } = await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
@@ -660,9 +767,8 @@ describe('Analyze Command Unit Tests', () => {
 
   describe('JSON output format', () => {
     it('should provide complete JSON analysis', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
@@ -734,9 +840,8 @@ describe('Analyze Command Unit Tests', () => {
 
   describe('Verbose output and dependency details', () => {
     it('should show detailed dependency information in verbose mode', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
@@ -800,12 +905,10 @@ describe('Analyze Command Unit Tests', () => {
     });
 
     it('should show issues for dependencies with problems', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
-      const { createTarballBuilder } = await import(
-        '../../lib/tarball-builder.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
+      const { createTarballBuilder } =
+        await import('../../lib/tarball-builder.js');
       const { getCacheDir } = await import('../../lib/utils/path.js');
       const { existsSync, readdirSync } = await import('node:fs');
 
@@ -875,9 +978,8 @@ describe('Analyze Command Unit Tests', () => {
     });
 
     it('should handle cache directory that does not exist', async () => {
-      const { scanLockfile, resolveGitReferences } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { scanLockfile, resolveGitReferences } =
+        await import('../../lockfile/scan.js');
       const { getCacheDir, getPlatformIdentifier, getTarballCachePath } =
         await import('../../lib/utils/path.js');
       const { existsSync } = await import('node:fs');

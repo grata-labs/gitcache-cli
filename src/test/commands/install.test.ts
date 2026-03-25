@@ -53,10 +53,18 @@ describe('Install Command - Comprehensive Unit Tests', () => {
     };
     mockGitCache = {};
 
-    vi.mocked(TarballBuilder).mockImplementation(() => mockTarballBuilder);
-    vi.mocked(RegistryClient).mockImplementation(() => mockRegistryClient);
-    vi.mocked(AuthManager).mockImplementation(() => mockAuthManager);
-    vi.mocked(GitCache).mockImplementation(() => mockGitCache);
+    vi.mocked(TarballBuilder).mockImplementation(function () {
+      return mockTarballBuilder;
+    });
+    vi.mocked(RegistryClient).mockImplementation(function () {
+      return mockRegistryClient;
+    });
+    vi.mocked(AuthManager).mockImplementation(function () {
+      return mockAuthManager;
+    });
+    vi.mocked(GitCache).mockImplementation(function () {
+      return mockGitCache;
+    });
 
     // Setup path utils mocks
     vi.mocked(pathUtils.getCacheDir).mockReturnValue('/mock/cache');
@@ -1235,6 +1243,54 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       }
     });
 
+    it('should skip auto-setup when CI token validation returns valid but no organization', async () => {
+      const originalEnv = process.env.GITCACHE_TOKEN;
+      process.env.GITCACHE_TOKEN = 'ci_test_token_123';
+
+      try {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          error: undefined,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from(''),
+          signal: null,
+          output: [null, Buffer.from(''), Buffer.from('')],
+          pid: 12345,
+        });
+
+        vi.mocked(nodeFs.existsSync).mockReturnValue(false);
+        vi.mocked(nodeFs.mkdirSync).mockReturnValue(undefined);
+        mockAuthManager.isAuthenticated.mockReturnValue(false);
+
+        vi.mocked(ciEnvironment.detectCIEnvironment).mockReturnValue({
+          detected: true,
+          platform: 'GitHub Actions',
+          hasToken: true,
+          tokenSource: 'environment',
+        });
+
+        // Token is valid but organization is empty/falsy
+        mockRegistryClient.validateCIToken.mockResolvedValue({
+          valid: true,
+          organization: '',
+        });
+
+        await installCommand.exec();
+
+        // Should NOT have stored auth data because organization was falsy
+        expect(mockAuthManager.storeAuthData).not.toHaveBeenCalled();
+        expect(console.log).not.toHaveBeenCalledWith(
+          expect.stringContaining('Auto-configured GitCache')
+        );
+      } finally {
+        if (originalEnv !== undefined) {
+          process.env.GITCACHE_TOKEN = originalEnv;
+        } else {
+          delete process.env.GITCACHE_TOKEN;
+        }
+      }
+    });
+
     it('should handle storeAuthData error during auto-setup gracefully', async () => {
       const originalEnv = process.env.GITCACHE_TOKEN;
       process.env.GITCACHE_TOKEN = 'ci_test_token_123';
@@ -1622,9 +1678,8 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       });
 
       // Mock parsePackageJsonGitDeps to return a Git dependency
-      const { parsePackageJsonGitDeps } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { parsePackageJsonGitDeps } =
+        await import('../../lockfile/scan.js');
       vi.mocked(parsePackageJsonGitDeps).mockReturnValue(
         new Map([
           ['test-git-dep', 'git+https://github.com/test/repo.git#v1.0.0'],
@@ -1731,9 +1786,8 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       });
 
       // Mock parsePackageJsonGitDeps to return no Git dependencies
-      const { parsePackageJsonGitDeps } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { parsePackageJsonGitDeps } =
+        await import('../../lockfile/scan.js');
       vi.mocked(parsePackageJsonGitDeps).mockReturnValue(new Map());
 
       // Mock successful npm install
@@ -1776,9 +1830,8 @@ describe('Install Command - Comprehensive Unit Tests', () => {
       });
 
       // Mock parsePackageJsonGitDeps to return a Git dependency without hash fragment
-      const { parsePackageJsonGitDeps } = await import(
-        '../../lockfile/scan.js'
-      );
+      const { parsePackageJsonGitDeps } =
+        await import('../../lockfile/scan.js');
       vi.mocked(parsePackageJsonGitDeps).mockReturnValue(
         new Map([
           ['test-git-dep', 'git+https://github.com/test/repo.git'], // No #reference

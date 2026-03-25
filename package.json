@@ -7,9 +7,9 @@
     "dev": "tsx src/index.ts",
     "build": "tsc",
     "test": "vitest run",
-    "test:debug": "vitest run --pool=forks --poolOptions.forks.singleFork=true --reporter=verbose",
+    "test:debug": "vitest run --maxWorkers=1 --no-isolate --reporter=verbose",
     "test:unit": "vitest run --exclude '**/integration/**'",
-    "test:unit:debug": "vitest run --exclude '**/integration/**' --pool=forks --poolOptions.forks.singleFork=true --reporter=verbose",
+    "test:unit:debug": "vitest run --exclude '**/integration/**' --maxWorkers=1 --no-isolate --reporter=verbose",
     "test:integration": "vitest run src/test/integration",
     "test:ci": "npm run test:unit && npm run test:integration",
     "test:ci:coverage": "vitest run --coverage",
@@ -68,7 +68,7 @@
     "@types/node": "^25.0.2",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "^4.1.1",
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
@@ -78,6 +78,6 @@
     "semantic-release": "^25.0.2",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.1"
   }
 }

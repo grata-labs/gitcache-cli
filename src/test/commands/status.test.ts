@@ -10,9 +10,8 @@ vi.mock('../../lib/utils/path.js');
 vi.mock('node:fs');
 
 const mockAuthManager = vi.mocked(AuthManager);
-const { calculateCacheSize, formatBytes, getCacheEntries } = await import(
-  '../../lib/prune.js'
-);
+const { calculateCacheSize, formatBytes, getCacheEntries } =
+  await import('../../lib/prune.js');
 const { getCacheDir } = await import('../../lib/utils/path.js');
 const { existsSync, statSync } = await import('node:fs');
 
@@ -37,7 +36,9 @@ describe('Status Command', () => {
       validateToken: vi.fn(),
     };
 
-    mockAuthManager.mockImplementation(() => mockAuthManagerInstance);
+    mockAuthManager.mockImplementation(function () {
+      return mockAuthManagerInstance;
+    });
 
     status = new Status();
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -317,7 +318,7 @@ describe('Status Command', () => {
       });
 
       it('should handle auth manager creation errors', async () => {
-        mockAuthManager.mockImplementation(() => {
+        mockAuthManager.mockImplementation(function () {
           throw new Error('Auth manager initialization failed');
         });
 

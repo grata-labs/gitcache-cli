@@ -3,13 +3,15 @@ import { createCLI, main } from '../../lib/cli.js';
 
 // Mock commander
 vi.mock('commander', () => ({
-  Command: vi.fn().mockImplementation(() => ({
-    name: vi.fn().mockReturnThis(),
-    description: vi.fn().mockReturnThis(),
-    version: vi.fn().mockReturnThis(),
-    option: vi.fn().mockReturnThis(),
-    parseAsync: vi.fn().mockResolvedValue(undefined),
-  })),
+  Command: vi.fn().mockImplementation(function () {
+    return {
+      name: vi.fn().mockReturnThis(),
+      description: vi.fn().mockReturnThis(),
+      version: vi.fn().mockReturnThis(),
+      option: vi.fn().mockReturnThis(),
+      parseAsync: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // Mock the command registry and commands
@@ -46,9 +48,8 @@ describe('CLI', () => {
   describe('createCLI', () => {
     it('should create and configure the CLI program', async () => {
       const { Command } = await import('commander');
-      const { registerCommands } = await import(
-        '../../lib/command-registry.js'
-      );
+      const { registerCommands } =
+        await import('../../lib/command-registry.js');
       const { commands } = await import('../../lib/commands.js');
 
       const MockCommand = vi.mocked(Command);
@@ -60,9 +61,9 @@ describe('CLI', () => {
         version: vi.fn().mockReturnThis(),
         option: vi.fn().mockReturnThis(),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function () {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       const program = createCLI();
 
@@ -92,9 +93,9 @@ describe('CLI', () => {
         option: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockRejectedValue(testError),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function () {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       await expect(main()).rejects.toThrow('process.exit called');
 
@@ -117,9 +118,9 @@ describe('CLI', () => {
         option: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockRejectedValue(nonErrorValue),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function () {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       await expect(main()).rejects.toThrow('process.exit called');
 
@@ -141,9 +142,9 @@ describe('CLI', () => {
         option: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockRejectedValue(null),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function () {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       await expect(main()).rejects.toThrow('process.exit called');
 
@@ -166,9 +167,9 @@ describe('CLI', () => {
         option: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockRejectedValue(objectError),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function () {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       await expect(main()).rejects.toThrow('process.exit called');
 
@@ -191,9 +192,9 @@ describe('CLI', () => {
         option: vi.fn().mockReturnThis(),
         parseAsync: vi.fn().mockRejectedValue(numberError),
       };
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function () {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       await expect(main()).rejects.toThrow('process.exit called');
 
@@ -217,9 +218,9 @@ describe('CLI', () => {
       };
       mockProgram.parseAsync.mockResolvedValue(mockProgram);
 
-      MockCommand.mockImplementation(
-        () => mockProgram as unknown as InstanceType<typeof Command>
-      );
+      MockCommand.mockImplementation(function () {
+        return mockProgram as unknown as InstanceType<typeof Command>;
+      });
 
       const result = await main();
 

@@ -398,6 +398,136 @@ describe('lockfile scanner', () => {
       consoleSpy.mockRestore();
       jsonParseSpy.mockRestore();
     });
+
+    it('should return empty dependencies when lockfileVersion is 0', () => {
+      const lockfilePath = join(tempTestDir, 'package-lock.json');
+
+      const lockfileV0 = {
+        lockfileVersion: 0,
+        dependencies: {
+          'test-git-package': {
+            resolved: 'git+https://github.com/user/repo.git#abc123',
+          },
+        },
+        packages: {
+          'node_modules/test-git-package': {
+            name: 'test-git-package',
+            resolved: 'git+https://github.com/user/repo.git#abc123',
+          },
+        },
+      };
+      writeFileSync(lockfilePath, JSON.stringify(lockfileV0, null, 2));
+
+      const result = scanLockfile(lockfilePath);
+
+      expect(result.lockfileVersion).toBe(0);
+      expect(result.dependencies).toHaveLength(0);
+      expect(result.hasGitDependencies).toBe(false);
+    });
+
+    it('should skip non-object depData entries in lockfile v1', () => {
+      const lockfilePath = join(tempTestDir, 'package-lock.json');
+
+      const lockfileV1 = {
+        lockfileVersion: 1,
+        dependencies: {
+          'valid-dep': {
+            resolved: 'git+https://github.com/user/repo.git#abc123',
+          },
+          'null-dep': null,
+          'string-dep': 'not-an-object',
+          'number-dep': 42,
+        },
+      };
+      writeFileSync(lockfilePath, JSON.stringify(lockfileV1, null, 2));
+
+      const result = scanLockfile(lockfilePath);
+
+      // Only the valid-dep should be parsed
+      expect(result.dependencies).toHaveLength(1);
+      expect(result.dependencies[0].name).toBe('valid-dep');
+    });
+
+    it('should skip non-object packageData entries in lockfile v2', () => {
+      const lockfilePath = join(tempTestDir, 'package-lock.json');
+
+      const lockfileV2 = {
+        lockfileVersion: 2,
+        packages: {
+          'node_modules/valid-pkg': {
+            name: 'valid-pkg',
+            resolved: 'git+https://github.com/user/repo.git#abc123',
+          },
+          'node_modules/null-pkg': null,
+          'node_modules/string-pkg': 'not-an-object',
+        },
+      };
+      writeFileSync(lockfilePath, JSON.stringify(lockfileV2, null, 2));
+
+      const result = scanLockfile(lockfilePath);
+
+      expect(result.dependencies).toHaveLength(1);
+      expect(result.dependencies[0].name).toBe('valid-pkg');
+    });
+
+    it('should not add git+ prefix when URL already starts with git+', () => {
+      const packageJsonPath = join(tempTestDir, 'package.json');
+      const lockfilePath = join(tempTestDir, 'package-lock.json');
+
+      // package.json has a URL that already has git+ prefix
+      const packageJson = {
+        dependencies: {
+          'test-pkg': 'git+https://github.com/user/repo.git#v1.0.0',
+        },
+      };
+      writeFileSync(packageJsonPath, JSON.stringify(packageJson));
+
+      const lockfileV2 = {
+        lockfileVersion: 2,
+        packages: {
+          'node_modules/test-pkg': {
+            name: 'test-pkg',
+            resolved: 'git+https://github.com/user/repo.git#abc123',
+          },
+        },
+      };
+      writeFileSync(lockfilePath, JSON.stringify(lockfileV2));
+
+      const result = scanLockfile(lockfilePath);
+
+      expect(result.dependencies).toHaveLength(1);
+      // The preferredUrl should use the package.json URL and NOT double-prefix
+      expect(result.dependencies[0].preferredUrl).toBe(
+        'git+https://github.com/user/repo.git#v1.0.0'
+      );
+      expect(result.dependencies[0].preferredUrl).not.toContain('git+git+');
+    });
+
+    it('should not double-prefix a URL that already has git+ after stripping', () => {
+      const lockfilePath = join(tempTestDir, 'package-lock.json');
+
+      // Use a double git+ prefix URL to hit the false branch on line 305
+      // After removing one git+, normalizedUrl still starts with git+
+      const lockfileV2 = {
+        lockfileVersion: 2,
+        packages: {
+          'node_modules/double-prefix-pkg': {
+            name: 'double-prefix-pkg',
+            resolved: 'git+git+https://github.com/user/repo.git#abc123',
+          },
+        },
+      };
+      writeFileSync(lockfilePath, JSON.stringify(lockfileV2));
+
+      const result = scanLockfile(lockfilePath);
+
+      expect(result.dependencies).toHaveLength(1);
+      // After normalizeGitUrl strips one git+ and skips re-adding (false branch line 305),
+      // the result should be git+https://... (not git+git+https://...)
+      expect(result.dependencies[0].preferredUrl).toBe(
+        'git+https://github.com/user/repo.git#abc123'
+      );
+    });
   });
 
   describe('Git URL detection and normalization', () => {
