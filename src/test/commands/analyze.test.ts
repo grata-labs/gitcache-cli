@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdirSync, rmSync, existsSync as actualExistsSync } from 'node:fs';
+import {
+  mkdirSync,
+  rmSync,
+  existsSync as actualExistsSync,
+  type PathLike,
+} from 'node:fs';
 
 // Mock the dependencies at the top level before imports
 vi.mock('../../lockfile/scan.js', () => ({
@@ -350,7 +355,7 @@ describe('Analyze Command Unit Tests', () => {
 
       // Mock readdirSync to throw an error when called with any path containing 'tarballs'
       // This handles cross-platform path separator differences
-      mockReaddirSync.mockImplementation((path) => {
+      mockReaddirSync.mockImplementation((path: PathLike) => {
         const pathStr = path.toString();
         if (pathStr.includes('tarballs')) {
           throw new Error('Permission denied');
@@ -1065,7 +1070,7 @@ describe('Analyze Command Unit Tests', () => {
       const mockExistsSync = vi.mocked(existsSync);
 
       // Mock existsSync to return false for pnpm-lock.yaml and yarn.lock
-      mockExistsSync.mockImplementation((path) => {
+      mockExistsSync.mockImplementation((path: PathLike) => {
         const pathStr = path.toString();
         if (
           pathStr.includes('pnpm-lock.yaml') ||

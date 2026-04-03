@@ -45,8 +45,8 @@ function readLogEntries(): LogEntry[] {
     return content
       .trim()
       .split('\n')
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line));
+      .filter((line: string) => line.length > 0)
+      .map((line: string) => JSON.parse(line));
   } catch {
     return [];
   }
