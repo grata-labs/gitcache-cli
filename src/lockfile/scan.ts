@@ -373,7 +373,7 @@ async function resolveRefToSha(repoUrl: string, ref: string): Promise<string> {
     const lines = output
       .trim()
       .split('\n')
-      .filter((line) => line.length > 0);
+      .filter((line: string) => line.length > 0);
 
     if (lines.length === 0) {
       // Try resolving HEAD if specific ref not found

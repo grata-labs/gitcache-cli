@@ -28,7 +28,7 @@ export function createCLI(): Command {
 export function main(): Promise<Command> {
   const program = createCLI();
 
-  return program.parseAsync(process.argv).catch((err) => {
+  return program.parseAsync(process.argv).catch((err): never => {
     // Handle errors gracefully - avoid showing stack traces for user errors
     if (err instanceof Error) {
       console.error(err.message);

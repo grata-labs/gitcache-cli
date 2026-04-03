@@ -244,7 +244,7 @@ export class Auth extends BaseCommand {
       return new Promise((resolve) => {
         let password = '';
         process.stdin.setEncoding('utf8');
-        process.stdin.on('data', (chunk) => {
+        process.stdin.on('data', (chunk: string) => {
           password += chunk;
         });
         process.stdin.on('end', () => {
